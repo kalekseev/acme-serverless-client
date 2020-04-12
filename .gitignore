@@ -1,0 +1,7 @@
+/.direnv
+/.envrc
+/services
+/lambda.zip
+__pycache__
+/.mypy_cache
+/.coverage

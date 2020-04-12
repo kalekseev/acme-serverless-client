@@ -1,0 +1,36 @@
+{
+  "name": "@kotify/cdk-lambda-acme",
+  "version": "0.1.0",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "description": "CDK library to deploy ACME lambda client",
+  "homepage": "https://github.com/kotify/cdk-lambda-acme#readme",
+  "license": "MIT",
+  "bin": {
+    "cdk-lambda-acme": "bin/cdk-lambda-acme.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@types/node": "10.17.5",
+    "aws-cdk": "1.32.2",
+    "ts-node": "^8.1.0",
+    "typescript": "~3.7.2",
+    "prettier": "^2.0.4",
+    "source-map-support": "^0.5.16",
+    "@aws-cdk/core": "^1.32.2"
+  },
+  "peerDependencies": {
+    "@aws-cdk/core": "^1.32.2"
+  },
+  "dependencies": {
+    "@aws-cdk/aws-events": "^1.32.2",
+    "@aws-cdk/aws-events-targets": "^1.32.2",
+    "@aws-cdk/aws-iam": "^1.32.2",
+    "@aws-cdk/aws-lambda": "^1.32.2",
+    "@aws-cdk/aws-s3": "^1.32.2"
+  }
+}
