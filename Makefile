@@ -45,7 +45,7 @@ fixtures/localhost_key.pem:
 fixtures.refresh: fixtures/localhost_cert.pem fixtures/localhost_key.pem
 
 build.lambda:
-	docker run --rm -v `pwd`:/code -t kotify/amazonlinux2-python:3.8 bash /code/package.sh
+	docker run --rm -v `pwd`:/code -t lambci/lambda:build-python3.8 bash /code/package.sh
 
 clean:
 	rm -rf lambda.zip lambda_acme/__pycache__

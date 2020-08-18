@@ -55,8 +55,8 @@ export class CdkLambdaACMEStack extends cdk.Stack {
     });
     fn.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: [],
-        resources: ["acm:ImportCertificate", "acm:DeleteCertificate"],
+        actions: ["acm:ImportCertificate", "acm:DeleteCertificate"],
+        resources: ["arn:aws:acm:*"],
         effect: iam.Effect.ALLOW,
       })
     );
