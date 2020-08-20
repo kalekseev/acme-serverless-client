@@ -10,38 +10,19 @@ BUCKET - bucket name where certificates stored
 SENTRY_DSN - optional, sentry dsn url
 """
 
-import datetime
-import json
-import logging
 import os
 import typing
 
 import acme.client
-import urllib3
 from acme import challenges, crypto_util, errors, messages
-from dateutil.tz import tzutc
 
 from . import crypto
 from .models import Account, Domain
-from .storage import AWSStorage, BaseStorage
 
-logger = logging.getLogger("aws-lambda-acme")
+if typing.TYPE_CHECKING:
+    from .storage.base import BaseStorage
 
 USER_AGENT = "aws-lambda-acme"
-
-
-if os.environ.get("SENTRY_DSN"):
-    import sentry_sdk
-    from sentry_sdk.integrations.aws_lambda import AwsLambdaIntegration
-    from sentry_sdk.integrations.logging import LoggingIntegration
-
-    sentry_sdk.init(
-        dsn=os.environ["SENTRY_DSN"],
-        integrations=[
-            AwsLambdaIntegration(),
-            LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
-        ],
-    )
 
 
 def select_http01_chall(orderr: messages.OrderResource) -> typing.Any:
@@ -91,7 +72,7 @@ def build_client(account: Account) -> acme.client.ClientV2:
 
 
 def setup_client(
-    account: typing.Optional[Account], storage: BaseStorage
+    account: typing.Optional[Account], storage: "BaseStorage"
 ) -> acme.client.ClientV2:
     if account:
         client = build_client(account)
@@ -107,7 +88,7 @@ def setup_client(
     return client
 
 
-def issue_or_renew(domain_name: str, storage: BaseStorage) -> None:
+def issue_or_renew(domain_name: str, storage: "BaseStorage") -> None:
     domain = storage.get_domain(name=domain_name)
     account = storage.get_account()
     client = setup_client(account, storage=storage)
@@ -118,7 +99,7 @@ def issue_or_renew(domain_name: str, storage: BaseStorage) -> None:
     storage.set_certificate(domain, fullchain_pem)
 
 
-def revoke(domain_name: str, storage: BaseStorage) -> None:
+def revoke(domain_name: str, storage: "BaseStorage") -> None:
     # just check if we have cert for that domain
     fullchain_pem = storage.get_certificate(Domain(name=domain_name))
     if not fullchain_pem:
@@ -133,65 +114,3 @@ def revoke(domain_name: str, storage: BaseStorage) -> None:
         client.revoke(fullchain_com, rsn=0)
     except errors.ConflictError:
         raise RuntimeError(f"[REVOKE] {domain_name} certificate already revoked.")
-
-
-def call_webhook(
-    event: typing.Mapping[str, typing.Any],
-    success: typing.List[str],
-    failure: typing.List[str],
-) -> None:
-    http = urllib3.PoolManager()
-    r = http.request(
-        "POST",
-        event["webhook"]["url"],
-        body=json.dumps(
-            {
-                **event["webhook"].get("body", {}),
-                "success_domains": success,
-                "failure_domains": failure,
-            }
-        ).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-    )
-    if r.status != 200:
-        raise RuntimeError(f"Webhook response [{r.status}]:\n\n{r.data}")
-
-
-def handler(event: typing.Any, context: typing.Any) -> typing.Mapping[str, typing.Any]:
-    storage = AWSStorage.from_env()
-    if event["action"] == "renew":
-        now = datetime.datetime.utcnow().replace(tzinfo=tzutc())
-        command = issue_or_renew
-        domains = [
-            domain
-            for domain, _ in storage.find_certificates(
-                not_valid_on_date=now + datetime.timedelta(days=30)
-            )
-        ]
-    elif event["action"] == "issue":
-        command = issue_or_renew
-        domains = [event["domain"]]
-    elif event["action"] == "revoke":
-        command = revoke
-        domains = [event["domain"]]
-
-    success = []
-    failure = []
-    for domain in domains:
-        try:
-            command(domain, storage)
-        except Exception as exc:
-            logger.error(str(exc))
-            failure.append(domain)
-        else:
-            success.append(domain)
-    if not success:
-        raise RuntimeError(f"All operations failed: {failure}")
-
-    try:
-        if "webhook" in event:
-            call_webhook(event, success, failure)
-    except Exception as exc:
-        logger.error(str(exc))
-
-    return {"statusCode": 200}

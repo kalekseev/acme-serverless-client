@@ -1,22 +1,22 @@
 import datetime
+import urllib.request
 
-import urllib3
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
-from lambda_acme.main import issue_or_renew, revoke
-from lambda_acme.storage import AWSStorage, Domain
+from acme_serverless_client import issue_or_renew, revoke
+from acme_serverless_client.models import Domain
+from acme_serverless_client.storage.aws import AWSStorage
 
 
 def test_load_balancer_redirect(minio_bucket, load_balancer, acm):
     storage = AWSStorage(bucket=minio_bucket, acm=acm)
     storage.set_validation("/.well-known/acme-challenge/randomkey", b"secretstring")
-    http = urllib3.PoolManager()
-    r = http.request(
-        "GET", load_balancer["url"] + "/.well-known/acme-challenge/randomkey"
+    r = urllib.request.urlopen(
+        load_balancer["url"] + "/.well-known/acme-challenge/randomkey"
     )
     assert r.status == 200
-    assert r.data == b"secretstring"
+    assert r.read() == b"secretstring"
 
 
 def test_issue_renew_revoke(minio_bucket, full_infra, acm):

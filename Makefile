@@ -44,17 +44,14 @@ fixtures/localhost_key.pem:
 
 fixtures.refresh: fixtures/localhost_cert.pem fixtures/localhost_key.pem
 
-build.lambda:
-	docker run --rm -v `pwd`:/code -t lambci/lambda:build-python3.8 bash /code/package.sh
-
-clean:
-	rm -rf lambda.zip lambda_acme/__pycache__
-
 lint:
-	flake8 lambda_acme/
-	isort -rc lambda_acme/
-	black lambda_acme/
-	mypy --strict --ignore-missing-imports --allow-untyped-decorators --follow-imports skip lambda_acme/*.py
+	flake8 src/
+	isort src/
+	black src/
+	mypy --strict --ignore-missing-imports --allow-untyped-decorators --follow-imports skip src/
 
 test:
-	PATH=./services:$(PATH) py.test --cov=lambda_acme --cov-branch --cov-context=test
+	PATH=./services:$(PATH) PYTHONPATH=./src PEBBLE_VA_NOSLEEP=1 py.test \
+		--cov=acme_serverless_client \
+		--cov-branch \
+		--cov-context=test

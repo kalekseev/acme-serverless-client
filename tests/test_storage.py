@@ -4,14 +4,13 @@ import acme.messages
 import pytest
 from dateutil.tz import tzutc
 
-from lambda_acme.storage import (
-    Account,
+from acme_serverless_client.models import Account, Domain
+from acme_serverless_client.storage.aws import (
     ACMStorageMixin,
     AWSStorage,
-    BaseStorage,
-    Domain,
     S3StorageMixin,
 )
+from acme_serverless_client.storage.base import BaseStorage
 
 
 class FakeStorage(BaseStorage):

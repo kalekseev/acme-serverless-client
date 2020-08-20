@@ -16,7 +16,7 @@ from botocore.client import Config
 from moto import mock_acm, mock_s3
 from urllib3.exceptions import InsecureRequestWarning
 
-from lambda_acme.storage import S3StorageMixin
+from acme_serverless_client.storage.aws import S3StorageMixin
 
 
 @pytest.fixture(scope="session")
@@ -57,7 +57,7 @@ def moto_credentials(monkeypatch):
 @pytest.fixture(scope="session")
 def read_fixture():
     def read(path):
-        d = pathlib.PosixPath(__file__) / "../../../fixtures" / path.lstrip("/")
+        d = pathlib.PosixPath(__file__) / "../../fixtures" / path.lstrip("/")
         return d.resolve().read_bytes()
 
     return read
@@ -118,7 +118,7 @@ def disable_ssl(monkeypatch: typing.Any) -> typing.Iterator[None]:
 
     net_cls = acme.client.ClientNetwork
     monkeypatch.setattr(
-        "lambda_acme.main.acme.client.ClientNetwork",
+        "acme_serverless_client.client.acme.client.ClientNetwork",
         lambda *args, **kwargs: net_cls(verify_ssl=False, *args, **kwargs),
     )
     with warnings.catch_warnings():
