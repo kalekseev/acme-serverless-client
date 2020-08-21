@@ -76,6 +76,16 @@ class S3StorageMixin(BaseMixin):
                 domain_name = obj["Key"].rsplit("/", 1)[-1]
                 yield (domain_name, valid_before)
 
+    def read_certificates(
+        self,
+    ) -> typing.Iterator[
+        typing.Tuple[str, typing.Optional[bytes], typing.Optional[bytes]]
+    ]:
+        for obj in self.bucket.list(Prefix="certificates/"):
+            key = obj["Key"]
+            domain_name = key.rsplit("/", 1)[-1]
+            yield (domain_name, self._get(key), self._get(f"keys/{domain_name}"))
+
 
 class ACMStorageMixin(BaseMixin):
     ACM_TAG = "lambda-acme"

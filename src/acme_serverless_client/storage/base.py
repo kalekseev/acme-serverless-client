@@ -34,6 +34,13 @@ class BaseStorage:
     ) -> typing.Iterator[typing.Tuple[str, datetime.datetime]]:
         raise NotImplementedError()
 
+    def read_certificates(
+        self,
+    ) -> typing.Iterator[
+        typing.Tuple[str, typing.Optional[bytes], typing.Optional[bytes]]
+    ]:
+        raise NotImplementedError
+
     def get_account(self) -> typing.Optional[Account]:
         data = self._get("account.json")
         if data:
