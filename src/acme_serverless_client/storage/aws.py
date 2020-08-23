@@ -1,9 +1,7 @@
 import datetime
 import io
-import os
 import typing
 
-import boto3
 import botocore.exceptions
 
 from ..models import Domain
@@ -106,7 +104,6 @@ class ACMStorageMixin(BaseMixin):
             while True:
                 resp = self.client.list_certificates(**params)
                 for c in resp["CertificateSummaryList"]:
-                    # TODO(kalekseev): use ACM_TAG for filtering
                     result[c["DomainName"]] = c["CertificateArn"]
                 if "NextToken" not in resp:
                     return result
@@ -160,10 +157,9 @@ class ACMStorageMixin(BaseMixin):
         super().remove_certificate(domain)
 
 
-class AWSStorage(ACMStorageMixin, S3StorageMixin, BaseStorage):
-    @classmethod
-    def from_env(cls: typing.Type["AWSStorage"], **kwargs: typing.Any) -> "AWSStorage":
-        s3 = boto3.client("s3", region_name=os.environ["AWS_REGION"])
-        acm = boto3.client("acm", region_name=os.environ["AWS_REGION"])
-        bucket = S3StorageMixin.Bucket(os.environ["BUCKET"], client=s3)
-        return cls(bucket=bucket, acm=acm, **kwargs)
+class S3Storage(S3StorageMixin, BaseStorage):
+    pass
+
+
+class ACMStorage(ACMStorageMixin, S3StorageMixin, BaseStorage):
+    pass

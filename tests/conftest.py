@@ -85,6 +85,11 @@ def lambda_env(monkeypatch, pebble_settings, minio_settings) -> None:
     monkeypatch.setenv("ACCOUNT_EMAIL", "fake@example.com")
 
 
+@pytest.fixture
+def acme_directory_url(pebble_settings):
+    return f"https://127.0.0.1:{pebble_settings['DIRECTORY_PORT']}/dir"
+
+
 @pytest.fixture(scope="session")
 def pebble_config(tmpdir_factory, pebble_settings, read_fixture):
     d = tmpdir_factory.mktemp("pebble")

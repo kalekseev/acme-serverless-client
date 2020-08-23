@@ -6,8 +6,8 @@ from dateutil.tz import tzutc
 
 from acme_serverless_client.models import Account, Domain
 from acme_serverless_client.storage.aws import (
+    ACMStorage,
     ACMStorageMixin,
-    AWSStorage,
     S3StorageMixin,
 )
 from acme_serverless_client.storage.base import BaseStorage
@@ -80,11 +80,6 @@ def test_s3_mixin_ops(bucket):
     assert storage._get(key) == b"mybytes"
 
 
-def test_s3_get_storage(minio_settings):
-    storage = AWSStorage.from_env()
-    assert storage.bucket.name == minio_settings["BUCKET"]
-
-
 FULLCHAIN_PEM = b"""-----BEGIN CERTIFICATE-----
 bytes
 -----END CERTIFICATE-----
@@ -125,7 +120,7 @@ def test_acm_set_certificate(acm, read_fixture, moto_certs):
 
 def test_s3_find_expired(bucket, acm, moto_certs):
     key_pem, fullchain_pem = moto_certs
-    storage = AWSStorage(bucket=bucket, acm=acm)
+    storage = ACMStorage(bucket=bucket, acm=acm)
     storage.set_certificate(Domain("*.example.com", key=key_pem), fullchain_pem)
     now = datetime.datetime.utcnow().replace(tzinfo=tzutc())
     assert not list(storage.find_certificates(now))

@@ -10,7 +10,6 @@ BUCKET - bucket name where certificates stored
 SENTRY_DSN - optional, sentry dsn url
 """
 
-import os
 import typing
 
 import acme.client
@@ -21,6 +20,7 @@ from .models import Account, Domain
 
 if typing.TYPE_CHECKING:
     from .storage.base import BaseStorage
+
 
 USER_AGENT = "aws-lambda-acme"
 
@@ -61,37 +61,48 @@ def perform_http01(
     return typing.cast(bytes, finalized_orderr.fullchain_pem.encode("utf8"))
 
 
-def build_client(account: Account) -> acme.client.ClientV2:
+def build_client(account: Account, directory_url: str) -> acme.client.ClientV2:
     net = acme.client.ClientNetwork(
         key=account.key, account=account.regr, user_agent=USER_AGENT,
     )
-    directory = messages.Directory.from_json(
-        net.get(os.environ["DIRECTORY_URL"]).json()
-    )
+    directory = messages.Directory.from_json(net.get(directory_url).json())
     return acme.client.ClientV2(directory, net=net)
 
 
 def setup_client(
-    account: typing.Optional[Account], storage: "BaseStorage"
+    account: typing.Optional[Account],
+    storage: "BaseStorage",
+    account_email: str,
+    directory_url: str,
 ) -> acme.client.ClientV2:
     if account:
-        client = build_client(account)
+        client = build_client(account, directory_url)
     else:
         new_account = Account()
-        client = build_client(new_account)
+        client = build_client(new_account, directory_url)
         new_account.regr = client.new_account(
             messages.NewRegistration.from_data(
-                email=os.environ["ACCOUNT_EMAIL"], terms_of_service_agreed=True
+                email=account_email, terms_of_service_agreed=True
             )
         )
         storage.set_account(new_account)
     return client
 
 
-def issue_or_renew(domain_name: str, storage: "BaseStorage") -> None:
+def issue_or_renew(
+    domain_name: str,
+    storage: "BaseStorage",
+    acme_account_email: str,
+    acme_directory_url: str,
+) -> None:
     domain = storage.get_domain(name=domain_name)
     account = storage.get_account()
-    client = setup_client(account, storage=storage)
+    client = setup_client(
+        account,
+        storage=storage,
+        directory_url=acme_directory_url,
+        account_email=acme_account_email,
+    )
 
     orderr = client.new_order(crypto_util.make_csr(domain.key, [domain.name]))
     challb = select_http01_chall(orderr)
@@ -99,7 +110,12 @@ def issue_or_renew(domain_name: str, storage: "BaseStorage") -> None:
     storage.set_certificate(domain, fullchain_pem)
 
 
-def revoke(domain_name: str, storage: "BaseStorage") -> None:
+def revoke(
+    domain_name: str,
+    storage: "BaseStorage",
+    acme_account_email: str,
+    acme_directory_url: str,
+) -> None:
     # just check if we have cert for that domain
     fullchain_pem = storage.get_certificate(Domain(name=domain_name))
     if not fullchain_pem:
@@ -109,7 +125,12 @@ def revoke(domain_name: str, storage: "BaseStorage") -> None:
     storage.remove_certificate(domain)
     fullchain_com = crypto.load_certificate(fullchain_pem)
     account = storage.get_account()
-    client = setup_client(account, storage=storage)
+    client = setup_client(
+        account,
+        storage=storage,
+        directory_url=acme_directory_url,
+        account_email=acme_account_email,
+    )
     try:
         client.revoke(fullchain_com, rsn=0)
     except errors.ConflictError:

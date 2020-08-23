@@ -1,6 +1,6 @@
 # ACME Serverless Client
 
-Currently supports only AWS S3 as cloud storage (experimental support for AWS ACM)
+Currently supports only AWS S3 as certificate storage (experimental support for AWS ACM).
 
 ## Development
 
