@@ -123,11 +123,7 @@ class ACMStorageMixin(BaseMixin):
         return (part1 + part2).encode(), chain.lstrip().encode()
 
     def _get_domain(
-        self,
-        name: str,
-        key: typing.Optional[bytes] = None,
-        acm_arn: typing.Optional[str] = None,
-        **kwargs: typing.Any,
+        self, name: str, key: typing.Optional[bytes] = None, **kwargs: typing.Any,
     ) -> Domain:
         acm_arn = self._acm_arn_resolver.get(name)
         return super()._get_domain(name=name, key=key, acm_arn=acm_arn, **kwargs)

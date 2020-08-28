@@ -14,8 +14,8 @@ from acme_serverless_client.storage.base import BaseStorage
 
 
 class FakeStorage(BaseStorage):
-    def __init__(self):
-        self._data = {}
+    def __init__(self, data=None):
+        self._data = data or {}
 
     def _get(self, key):
         return self._data.get(key)
@@ -49,6 +49,13 @@ def test_domain():
     domain = storage.get_domain("*.my.com")
     assert domain
     assert domain.key
+
+
+def test_domain_exist():
+    storage = FakeStorage({"keys/*.my.com": b"randomprivatekey"})
+    domain = storage.get_domain("*.my.com")
+    assert domain
+    assert domain.key == b"randomprivatekey"
 
 
 def test_get_certificate():

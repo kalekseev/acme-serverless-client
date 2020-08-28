@@ -1,13 +1,6 @@
 """ACME-v2 Client for HTTP-01 challenge.
 
 Based on https://github.com/certbot/certbot/blob/859dc38cb9195de072bc46e30e3edc0dab04f84d/acme/examples/http01_example.py
-
-Expected environment variables:
-
-DIRECTORY_URL - ACME server directory url
-ACCOUNT_EMAIL - email used to issue certificates
-BUCKET - bucket name where certificates stored
-SENTRY_DSN - optional, sentry dsn url
 """
 
 import typing

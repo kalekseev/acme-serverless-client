@@ -2,6 +2,9 @@
 
 Currently supports only AWS S3 as certificate storage (experimental support for AWS ACM).
 
+Install with `pip install https://github.com/kalekseev/acme-serverless-client/archive/master.tar.gz`,
+replace master with commit hash to pin.
+
 ## Development
 
 You need these binaries available in your PATH:

@@ -21,7 +21,7 @@ class BaseStorage:
         self, name: str, key: typing.Optional[bytes] = None, **kwargs: typing.Any
     ) -> Domain:
         key = self._get(f"keys/{name}")
-        domain = Domain(name=name, **kwargs)
+        domain = Domain(name=name, key=key, **kwargs)
         if not key:
             self._set(f"keys/{name}", domain.key)
         return domain
