@@ -63,26 +63,18 @@ class S3StorageMixin(BaseMixin):
     def _del(self, name: str) -> None:
         self.bucket.delete(name)
 
-    def find_certificates(
-        self, not_valid_on_date: datetime.datetime
-    ) -> typing.Iterator[typing.Tuple[str, datetime.datetime]]:
-        days_90 = datetime.timedelta(days=90)
-        for obj in self.bucket.list(Prefix="certificates/"):
-            valid_after = obj["LastModified"]
-            valid_before = valid_after + days_90
-            if not_valid_on_date < valid_after or not_valid_on_date > valid_before:
-                domain_name = obj["Key"].rsplit("/", 1)[-1]
-                yield (domain_name, valid_before)
-
-    def read_certificates(
+    def list_certificates(
         self,
-    ) -> typing.Iterator[
-        typing.Tuple[str, typing.Optional[bytes], typing.Optional[bytes]]
-    ]:
-        for obj in self.bucket.list(Prefix="certificates/"):
-            key = obj["Key"]
-            domain_name = key.rsplit("/", 1)[-1]
-            yield (domain_name, self._get(key), self._get(f"keys/{domain_name}"))
+    ) -> typing.Iterator[typing.Tuple[str, datetime.datetime]]:
+        for obj in self.bucket.list(Prefix=self.certificate_prefix):
+            domain_name = obj["Key"].rsplit("/", 1)[-1]
+            valid_after = obj["LastModified"]
+            yield (domain_name, valid_after)
+
+    def set_validation(self, key: str, value: bytes) -> None:
+        if key.startswith("/"):
+            key = key.lstrip("/")
+        self._set(key, value)
 
 
 class ACMStorageMixin(BaseMixin):
@@ -122,11 +114,9 @@ class ACMStorageMixin(BaseMixin):
         part1, part2, chain = fullchain_pem.decode().partition(sep)
         return (part1 + part2).encode(), chain.lstrip().encode()
 
-    def _get_domain(
-        self, name: str, key: typing.Optional[bytes] = None, **kwargs: typing.Any,
-    ) -> Domain:
+    def get_domain(self, name: str, **kwargs: typing.Any,) -> Domain:
         acm_arn = self._acm_arn_resolver.get(name)
-        return super()._get_domain(name=name, key=key, acm_arn=acm_arn, **kwargs)
+        return super().get_domain(name=name, acm_arn=acm_arn, **kwargs)
 
     def set_certificate(self, domain: Domain, fullchain_pem: bytes) -> None:
         cert, chain = ACMStorageMixin._extract_certificate(fullchain_pem)
@@ -143,14 +133,14 @@ class ACMStorageMixin(BaseMixin):
             self._acm_arn_resolver._store[domain.name] = domain.acm_arn  # type: ignore
         super().set_certificate(domain, fullchain_pem)
 
-    def remove_certificate(self, domain: Domain) -> None:
+    def remove_domain(self, domain: Domain) -> None:
         """
         Remove certificate from ACM.
         Will fail with ResourceInUseException if it in use.
         """
         if domain.acm_arn:
             self.acm.delete_certificate(CertificateArn=domain.acm_arn)
-        super().remove_certificate(domain)
+        super().remove_domain(domain)
 
 
 class S3Storage(S3StorageMixin, BaseStorage):

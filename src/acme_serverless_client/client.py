@@ -87,6 +87,7 @@ def issue_or_renew(
     storage: "BaseStorage",
     acme_account_email: str,
     acme_directory_url: str,
+    validation_callback: ValidationCallback,
 ) -> None:
     domain = storage.get_domain(name=domain_name)
     account = storage.get_account()
@@ -99,7 +100,7 @@ def issue_or_renew(
 
     orderr = client.new_order(crypto_util.make_csr(domain.key, [domain.name]))
     challb = select_http01_chall(orderr)
-    fullchain_pem = perform_http01(client, challb, orderr, storage.set_validation)
+    fullchain_pem = perform_http01(client, challb, orderr, validation_callback)
     storage.set_certificate(domain, fullchain_pem)
 
 
@@ -115,7 +116,7 @@ def revoke(
         raise RuntimeError(f"[REVOKE] {domain_name} certificate not found.")
     # now construct a real domain object
     domain = storage.get_domain(name=domain_name)
-    storage.remove_certificate(domain)
+    storage.remove_domain(domain)
     fullchain_com = crypto.load_certificate(fullchain_pem)
     account = storage.get_account()
     client = setup_client(

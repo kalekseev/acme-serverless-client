@@ -1,7 +1,8 @@
 #!/bin/bash
-mkdir -p tmpdir/lambda_acme
-python3.8 -m pip install -r /code/requirements.txt -t tmpdir
+set -xe
+mkdir -p build
+python3.8 -m pip install https://github.com/kalekseev/acme-serverless-client/archive/master.tar.gz -t build
 rm -f /code/lambda.zip
-cp -r /code/lambda_acme/*.py tmpdir/lambda_acme/
-cd tmpdir || exit
+cp -r /code/index.py build
+cd build
 zip -r /code/lambda.zip .

@@ -5,8 +5,19 @@ from ..models import Account, Domain
 
 
 class BaseStorage:
+    certificate_prefix = "certificates/"
+    key_prefix = "keys/"
+
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         pass
+
+    @classmethod
+    def _build_certificate_storage_key(self, domain_name: str) -> str:
+        return f"{self.certificate_prefix}{domain_name}"
+
+    @classmethod
+    def _build_key_storage_key(self, domain_name: str) -> str:
+        return f"{self.key_prefix}{domain_name}"
 
     def _get(self, name: str) -> typing.Optional[bytes]:
         raise NotImplementedError()
@@ -17,29 +28,17 @@ class BaseStorage:
     def _del(self, name: str) -> None:
         raise NotImplementedError()
 
-    def _get_domain(
-        self, name: str, key: typing.Optional[bytes] = None, **kwargs: typing.Any
-    ) -> Domain:
-        key = self._get(f"keys/{name}")
+    def get_domain(self, name: str, **kwargs: typing.Any) -> Domain:
+        key = self._get(self._build_key_storage_key(name))
         domain = Domain(name=name, key=key, **kwargs)
         if not key:
-            self._set(f"keys/{name}", domain.key)
+            self._set(self._build_key_storage_key(name), domain.key)
         return domain
 
-    def get_domain(self, name: str) -> Domain:
-        return self._get_domain(name=name)
-
-    def find_certificates(
-        self, not_valid_on_date: datetime.datetime
+    def list_certificates(
+        self,
     ) -> typing.Iterator[typing.Tuple[str, datetime.datetime]]:
         raise NotImplementedError()
-
-    def read_certificates(
-        self,
-    ) -> typing.Iterator[
-        typing.Tuple[str, typing.Optional[bytes], typing.Optional[bytes]]
-    ]:
-        raise NotImplementedError
 
     def get_account(self) -> typing.Optional[Account]:
         data = self._get("account.json")
@@ -51,16 +50,11 @@ class BaseStorage:
         return self._set("account.json", account.json_dumps().encode())
 
     def get_certificate(self, domain: Domain) -> typing.Optional[bytes]:
-        return self._get(f"certificates/{domain.name}")
+        return self._get(self._build_certificate_storage_key(domain.name))
 
     def set_certificate(self, domain: Domain, fullchain_pem: bytes) -> None:
-        self._set(f"certificates/{domain.name}", fullchain_pem)
+        self._set(self._build_certificate_storage_key(domain.name), fullchain_pem)
 
-    def remove_certificate(self, domain: Domain) -> None:
-        self._del(f"certificates/{domain.name}")
-        self._del(f"keys/{domain.name}")
-
-    def set_validation(self, key: str, value: bytes) -> None:
-        if key.startswith("/"):
-            key = key.lstrip("/")
-        self._set(key, value)
+    def remove_domain(self, domain: Domain) -> None:
+        self._del(self._build_certificate_storage_key(domain.name))
+        self._del(self._build_key_storage_key(domain.name))

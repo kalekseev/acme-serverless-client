@@ -5,6 +5,11 @@ Currently supports only AWS S3 as certificate storage (experimental support for 
 Install with `pip install https://github.com/kalekseev/acme-serverless-client/archive/master.tar.gz`,
 replace master with commit hash to pin.
 
+## Example lambda
+
+`example/index.py` contains example lambda function that accepts input like: `{"action": "issue", "domain": "example.com"}`.
+To build zip archive for deployment run `make lambda.zip` inside `example` dir.
+
 ## Development
 
 You need these binaries available in your PATH:

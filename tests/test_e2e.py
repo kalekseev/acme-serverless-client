@@ -28,6 +28,7 @@ def test_acm_issue_renew_revoke(minio_bucket, full_infra, acm, acme_directory_ur
         storage,
         acme_directory_url=acme_directory_url,
         acme_account_email="fake@example.com",
+        validation_callback=storage.set_validation,
     )
     pem_data = storage.get_certificate(Domain(domain_name))
     assert pem_data
@@ -45,6 +46,7 @@ def test_acm_issue_renew_revoke(minio_bucket, full_infra, acm, acme_directory_ur
         storage,
         acme_directory_url=acme_directory_url,
         acme_account_email="fake@example.com",
+        validation_callback=storage.set_validation,
     )
     pem_data = storage.get_certificate(Domain(domain_name))
     assert pem_data

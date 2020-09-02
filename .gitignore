@@ -1,7 +1,7 @@
 /.direnv
 /.envrc
 /services
-/lambda.zip
+/example/lambda.zip
 __pycache__
 /.mypy_cache
 /.coverage

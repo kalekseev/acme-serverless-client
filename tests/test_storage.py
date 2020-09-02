@@ -2,8 +2,10 @@ import datetime
 
 import acme.messages
 import pytest
+import time_machine
 from dateutil.tz import tzutc
 
+from acme_serverless_client.helpers import find_certificates_to_renew
 from acme_serverless_client.models import Account, Domain
 from acme_serverless_client.storage.aws import (
     ACMStorage,
@@ -130,13 +132,23 @@ def test_s3_find_expired(bucket, acm, moto_certs):
     storage = ACMStorage(bucket=bucket, acm=acm)
     storage.set_certificate(Domain("*.example.com", key=key_pem), fullchain_pem)
     now = datetime.datetime.utcnow().replace(tzinfo=tzutc())
-    assert not list(storage.find_certificates(now))
-    assert not list(storage.find_certificates(now + datetime.timedelta(days=89)))
-    assert not list(storage.find_certificates(now + datetime.timedelta(days=1)))
-    certs = list(storage.find_certificates(now + datetime.timedelta(days=91)))
-    assert len(certs) == 1
-    certs = list(storage.find_certificates(now - datetime.timedelta(days=91)))
-    assert len(certs) == 1
-    certs = list(storage.find_certificates(now - datetime.timedelta(days=1)))
-    assert len(certs) == 1
-    assert certs[0][0] == "*.example.com"
+    assert not list(find_certificates_to_renew(storage))
+    with time_machine.travel(now + datetime.timedelta(days=59)):
+        assert not list(find_certificates_to_renew(storage))
+    with time_machine.travel(now - datetime.timedelta(days=10)):
+        assert not list(find_certificates_to_renew(storage))
+    with time_machine.travel(now + datetime.timedelta(days=61)):
+        certs = list(find_certificates_to_renew(storage))
+        assert len(certs) == 1
+        assert certs[0][0] == "*.example.com"
+    with time_machine.travel(now + datetime.timedelta(days=356)):
+        certs = list(find_certificates_to_renew(storage))
+        assert len(certs) == 1
+        assert certs[0][0] == "*.example.com"
+    with time_machine.travel(now + datetime.timedelta(days=90)):
+        storage.set_certificate(Domain("new.example.com", key=key_pem), fullchain_pem)
+        certs = list(find_certificates_to_renew(storage))
+        assert len(certs) == 1
+    with time_machine.travel(now + datetime.timedelta(days=180)):
+        certs = list(find_certificates_to_renew(storage))
+        assert len(certs) == 2
