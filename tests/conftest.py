@@ -222,7 +222,9 @@ def minio_bucket(_minio_bucket, minio_settings) -> typing.Iterator[None]:
 @pytest.fixture
 def bucket(s3, minio_settings):
     name = minio_settings["BUCKET"]
-    s3.create_bucket(Bucket=name)
+    s3.create_bucket(
+        Bucket=name, CreateBucketConfiguration={"LocationConstraint": "ap-southeast-2"}
+    )
     policy = {
         "Version": "2012-10-17",
         "Statement": [
