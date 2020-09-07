@@ -12,8 +12,9 @@ To build zip archive for deployment run `make lambda.zip` inside `example` dir.
 
 ## Development
 
-You need these binaries available in your PATH:
+For testing you need these binaries available in your PATH:
 
+ - dig
  - [pebble](https://github.com/letsencrypt/pebble/releases)
  - [challtestsrv](https://github.com/letsencrypt/pebble/releases)
  - [minio](https://min.io/download)

@@ -71,9 +71,12 @@ class S3Storage(BaseStorage):
             key = key.lstrip("/")
         self._set(key, value)
 
+    def del_validation(self, key: str) -> None:
+        self._del(key)
+
 
 class ACMStorageObserver(StorageObserverProtocol):
-    ACM_TAG = "lambda-acme"
+    ACM_TAG = "acme-serverless-client"
 
     class ARNResolver:
         def __init__(self, client: typing.Any):

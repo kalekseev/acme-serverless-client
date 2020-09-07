@@ -13,6 +13,14 @@ class ObserverEventsProtocol(Protocol):
         ...
 
 
+class AuthenticatorStorageProtocol(Protocol):
+    def set_validation(self, key: str, value: bytes) -> None:
+        ...
+
+    def del_validation(self, key: str) -> None:
+        ...
+
+
 class StorageProtocol(ObserverEventsProtocol, Protocol):
     def get_domain(self, name: str) -> Domain:
         ...

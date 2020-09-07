@@ -5,6 +5,7 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
 from acme_serverless_client import issue_or_renew, revoke
+from acme_serverless_client.authenticators.http_storage import StorageAuthenticator
 from acme_serverless_client.models import Domain
 from acme_serverless_client.storage.aws import ACMStorageObserver, S3Storage
 
@@ -26,12 +27,13 @@ def test_acm_issue_renew_revoke(minio_bucket, full_infra, acm, acme_directory_ur
     storage.subscribe(observer)
     domain_name = "my3.example.com"
 
+    auth = StorageAuthenticator(storage=storage)
     issue_or_renew(
         domain_name,
         storage,
         acme_directory_url=acme_directory_url,
         acme_account_email="fake@example.com",
-        validation_callback=storage.set_validation,
+        authenticators=[auth],
     )
     pem_data = storage.get_certificate(Domain(domain_name))
     assert pem_data
@@ -48,7 +50,7 @@ def test_acm_issue_renew_revoke(minio_bucket, full_infra, acm, acme_directory_ur
         storage,
         acme_directory_url=acme_directory_url,
         acme_account_email="fake@example.com",
-        validation_callback=storage.set_validation,
+        authenticators=[auth],
     )
     pem_data = storage.get_certificate(Domain(domain_name))
     assert pem_data

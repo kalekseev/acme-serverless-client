@@ -7,11 +7,7 @@ from dateutil.tz import tzutc
 
 from acme_serverless_client.helpers import find_certificates_to_renew
 from acme_serverless_client.models import Account, Domain
-from acme_serverless_client.storage.aws import (
-    ACMStorageObserver,
-    S3Storage,
-    S3StorageMixin,
-)
+from acme_serverless_client.storage.aws import ACMStorageObserver, S3Storage
 from acme_serverless_client.storage.base import BaseStorage
 
 
@@ -83,7 +79,7 @@ def test_s3_bucket_ops(bucket):
 
 
 def test_s3_mixin_ops(bucket):
-    storage = S3StorageMixin(bucket=bucket)
+    storage = S3Storage(bucket=bucket)
     key = "keys/example.com"
     assert storage._get(key) is None
     storage._set(key, b"mybytes")

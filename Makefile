@@ -53,6 +53,7 @@ lint:
 		--allow-untyped-decorators \
 		--follow-imports skip \
 		--warn-unreachable \
+		--allow-any-generics \
 		src/ example/index.py
 
 test:

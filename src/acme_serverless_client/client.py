@@ -6,52 +6,45 @@ Based on https://github.com/certbot/certbot/blob/859dc38cb9195de072bc46e30e3edc0
 import typing
 
 import acme.client
-from acme import challenges, crypto_util, errors, messages
+from acme import crypto_util, errors, messages
 
 from . import crypto
+from .authenticators.base import AuthenticatorProtocol
 from .models import Account, Domain
 
 if typing.TYPE_CHECKING:
     from .storage.base import StorageProtocol
 
-
-USER_AGENT = "aws-lambda-acme"
-
-
-def select_http01_chall(orderr: messages.OrderResource) -> typing.Any:
-    """Extract authorization resource from within order resource."""
-    # Authorization Resource: authz.
-    # This object holds the offered challenges by the server and their status.
-    authz_list = orderr.authorizations
-
-    for authz in authz_list:
-        # Choosing challenge.
-        # authz.body.challenges is a set of ChallengeBody objects.
-        for i in authz.body.challenges:
-            # Find the supported challenge.
-            if isinstance(i.chall, challenges.HTTP01):
-                return i
-
-    raise Exception("HTTP-01 challenge was not offered by the CA server.")
+USER_AGENT = "acme-serverless-client"
 
 
-ValidationCallback = typing.Callable[[str, bytes], None]
+def select_authenticator(
+    authenticators: typing.Sequence[AuthenticatorProtocol],
+    domain: str,
+    challenges: typing.Iterable[typing.Any],
+) -> typing.Tuple[AuthenticatorProtocol, typing.Any]:
+    for authenticator in authenticators:
+        for challb in challenges:
+            if authenticator.is_supported(domain, challb.chall):
+                return (authenticator, challb)
+    raise Exception(f"Can't select challenge for domain: {domain}")
 
 
-def perform_http01(
-    client_acme: acme.client.ClientV2,
-    challb: typing.Any,
+def select_challs(
     orderr: messages.OrderResource,
-    validation_callback: ValidationCallback,
-) -> bytes:
-    """Set up standalone webserver and perform HTTP-01 challenge."""
-
-    response, validation = challb.response_and_validation(client_acme.net.key)
-    validation_callback(challb.chall.path, validation.encode())
-    client_acme.answer_challenge(challb, response)
-    finalized_orderr = client_acme.poll_and_finalize(orderr)
-
-    return typing.cast(bytes, finalized_orderr.fullchain_pem.encode("utf8"))
+    authenticators: typing.Sequence[AuthenticatorProtocol],
+) -> typing.Sequence[
+    typing.Tuple[AuthenticatorProtocol, typing.Set[typing.Tuple[typing.Any, str]]]
+]:
+    result: typing.Dict[
+        AuthenticatorProtocol, typing.Set[typing.Tuple[typing.Any, str]]
+    ] = {}
+    for authz in orderr.authorizations:
+        domain = authz.body.identifier.value
+        challenges = authz.body.challenges
+        authenticator, challb = select_authenticator(authenticators, domain, challenges)
+        result.setdefault(authenticator, set()).add((challb, domain))
+    return list(result.items())
 
 
 def build_client(account: Account, directory_url: str) -> acme.client.ClientV2:
@@ -63,11 +56,9 @@ def build_client(account: Account, directory_url: str) -> acme.client.ClientV2:
 
 
 def setup_client(
-    account: typing.Optional[Account],
-    storage: "StorageProtocol",
-    account_email: str,
-    directory_url: str,
+    storage: "StorageProtocol", account_email: str, directory_url: str,
 ) -> acme.client.ClientV2:
+    account = storage.get_account()
     if account:
         client = build_client(account, directory_url)
     else:
@@ -82,25 +73,39 @@ def setup_client(
     return client
 
 
+def perform(
+    client_acme: acme.client.ClientV2,
+    challs: typing.Iterable[typing.Tuple[typing.Any, str]],
+    orderr: messages.OrderResource,
+    authenticator: AuthenticatorProtocol,
+) -> bytes:
+    account_key = client_acme.net.key
+    authenticator.perform(challs, account_key)
+    for challb, _ in challs:
+        client_acme.answer_challenge(challb, challb.response(account_key))
+    finalized_orderr = client_acme.poll_and_finalize(orderr)
+
+    return typing.cast(bytes, finalized_orderr.fullchain_pem.encode("utf8"))
+
+
 def issue_or_renew(
     domain_name: str,
     storage: "StorageProtocol",
     acme_account_email: str,
     acme_directory_url: str,
-    validation_callback: ValidationCallback,
+    authenticators: typing.Sequence[AuthenticatorProtocol],
 ) -> None:
     domain = storage.get_domain(name=domain_name)
-    account = storage.get_account()
     client = setup_client(
-        account,
         storage=storage,
         directory_url=acme_directory_url,
         account_email=acme_account_email,
     )
 
     orderr = client.new_order(crypto_util.make_csr(domain.key, [domain.name]))
-    challb = select_http01_chall(orderr)
-    fullchain_pem = perform_http01(client, challb, orderr, validation_callback)
+    auth_challs = select_challs(orderr, authenticators)
+    for authenticator, challs in auth_challs:
+        fullchain_pem = perform(client, challs, orderr, authenticator)
     storage.set_certificate(domain, fullchain_pem)
 
 
@@ -118,9 +123,7 @@ def revoke(
     domain = storage.get_domain(name=domain_name)
     storage.remove_domain(domain)
     fullchain_com = crypto.load_certificate(fullchain_pem)
-    account = storage.get_account()
     client = setup_client(
-        account,
         storage=storage,
         directory_url=acme_directory_url,
         account_email=acme_account_email,

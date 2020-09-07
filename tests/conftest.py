@@ -16,7 +16,7 @@ from botocore.client import Config
 from moto import mock_acm, mock_s3
 from urllib3.exceptions import InsecureRequestWarning
 
-from acme_serverless_client.storage.aws import S3StorageMixin
+from acme_serverless_client.storage.aws import S3Storage
 
 
 @pytest.fixture(scope="session")
@@ -205,7 +205,7 @@ def _minio_bucket(minio, minio_boto3_settings, minio_settings):
         ],
     }
     client.put_bucket_policy(Bucket=name, Policy=json.dumps(policy))
-    return S3StorageMixin.Bucket(name, client)
+    return S3Storage.Bucket(name, client)
 
 
 @pytest.fixture
@@ -238,7 +238,7 @@ def bucket(s3, minio_settings):
         ],
     }
     s3.put_bucket_policy(Bucket=name, Policy=json.dumps(policy))
-    return S3StorageMixin.Bucket(name, s3)
+    return S3Storage.Bucket(name, s3)
 
 
 @pytest.fixture()
@@ -248,6 +248,7 @@ def pebble(pebble_settings, pebble_config) -> typing.Iterator[None]:
             "pebble",
             "-config",
             pebble_config,
+            "-strict",
             "-dnsserver",
             f"127.0.0.1:{pebble_settings['DNS_PORT']}",
         ]
