@@ -12,7 +12,7 @@ from . import crypto
 from .models import Account, Domain
 
 if typing.TYPE_CHECKING:
-    from .storage.base import BaseStorage
+    from .storage.base import StorageProtocol
 
 
 USER_AGENT = "aws-lambda-acme"
@@ -64,7 +64,7 @@ def build_client(account: Account, directory_url: str) -> acme.client.ClientV2:
 
 def setup_client(
     account: typing.Optional[Account],
-    storage: "BaseStorage",
+    storage: "StorageProtocol",
     account_email: str,
     directory_url: str,
 ) -> acme.client.ClientV2:
@@ -84,7 +84,7 @@ def setup_client(
 
 def issue_or_renew(
     domain_name: str,
-    storage: "BaseStorage",
+    storage: "StorageProtocol",
     acme_account_email: str,
     acme_directory_url: str,
     validation_callback: ValidationCallback,
@@ -106,7 +106,7 @@ def issue_or_renew(
 
 def revoke(
     domain_name: str,
-    storage: "BaseStorage",
+    storage: "StorageProtocol",
     acme_account_email: str,
     acme_directory_url: str,
 ) -> None:

@@ -6,11 +6,12 @@ from cryptography.hazmat.backends import default_backend
 
 from acme_serverless_client import issue_or_renew, revoke
 from acme_serverless_client.models import Domain
-from acme_serverless_client.storage.aws import ACMStorage
+from acme_serverless_client.storage.aws import ACMStorageObserver, S3Storage
 
 
 def test_load_balancer_redirect(minio_bucket, load_balancer, acm):
-    storage = ACMStorage(bucket=minio_bucket, acm=acm)
+    storage = S3Storage(bucket=minio_bucket)
+    storage.subscribe(ACMStorageObserver(acm=acm))
     storage.set_validation("/.well-known/acme-challenge/randomkey", b"secretstring")
     r = urllib.request.urlopen(
         load_balancer["url"] + "/.well-known/acme-challenge/randomkey"
@@ -20,7 +21,9 @@ def test_load_balancer_redirect(minio_bucket, load_balancer, acm):
 
 
 def test_acm_issue_renew_revoke(minio_bucket, full_infra, acm, acme_directory_url):
-    storage = ACMStorage(bucket=minio_bucket, acm=acm)
+    storage = S3Storage(bucket=minio_bucket)
+    observer = ACMStorageObserver(acm=acm)
+    storage.subscribe(observer)
     domain_name = "my3.example.com"
 
     issue_or_renew(
@@ -37,9 +40,8 @@ def test_acm_issue_renew_revoke(minio_bucket, full_infra, acm, acme_directory_ur
     valid_from = cert.not_valid_before
     assert datetime.datetime.now() > valid_from
 
-    domain = storage.get_domain(domain_name)
-    assert domain.acm_arn
-    acm_arn = domain.acm_arn
+    acm_arn = observer._acm_arn_resolver.get(domain_name)
+    assert acm_arn
 
     issue_or_renew(
         domain_name,
@@ -55,9 +57,8 @@ def test_acm_issue_renew_revoke(minio_bucket, full_infra, acm, acme_directory_ur
     assert cert.not_valid_before > valid_from
     assert datetime.datetime.now() > cert.not_valid_before
 
-    domain = storage.get_domain(domain_name)
-    assert domain.acm_arn
-    assert acm_arn == domain.acm_arn
+    new_acm_arn = observer._acm_arn_resolver.get(domain_name)
+    assert acm_arn == new_acm_arn
 
     revoke(
         domain_name,

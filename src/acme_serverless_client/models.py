@@ -8,15 +8,9 @@ from . import crypto
 
 
 class Domain:
-    def __init__(
-        self,
-        name: str,
-        key: typing.Optional[bytes] = None,
-        acm_arn: typing.Optional[str] = None,
-    ) -> None:
+    def __init__(self, name: str, key: typing.Optional[bytes] = None) -> None:
         self.name = name
         self._key = key
-        self.acm_arn = acm_arn
 
     @property
     def key(self) -> bytes:

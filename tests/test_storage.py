@@ -8,8 +8,8 @@ from dateutil.tz import tzutc
 from acme_serverless_client.helpers import find_certificates_to_renew
 from acme_serverless_client.models import Account, Domain
 from acme_serverless_client.storage.aws import (
-    ACMStorage,
-    ACMStorageMixin,
+    ACMStorageObserver,
+    S3Storage,
     S3StorageMixin,
 )
 from acme_serverless_client.storage.base import BaseStorage
@@ -18,6 +18,7 @@ from acme_serverless_client.storage.base import BaseStorage
 class FakeStorage(BaseStorage):
     def __init__(self, data=None):
         self._data = data or {}
+        self._subscribers = set()
 
     def _get(self, key):
         return self._data.get(key)
@@ -109,27 +110,29 @@ bytes
 morebytes
 -----END CERTIFICATE-----
 """
-    assert ACMStorageMixin._extract_certificate(FULLCHAIN_PEM) == (cert, chain)
+    assert ACMStorageObserver._extract_certificate(FULLCHAIN_PEM) == (cert, chain)
 
 
 def test_acm_set_certificate(acm, read_fixture, moto_certs):
-    class Storage(ACMStorageMixin, FakeStorage):
-        pass
-
     key_pem, fullchain_pem = moto_certs
-    storage = Storage(acm)
+    storage = FakeStorage()
+    observer = ACMStorageObserver(acm=acm)
+    storage.subscribe(observer)
     storage.set_certificate(Domain("*.moto.com"), fullchain_pem)
     resp = acm.list_certificates()
     assert len(resp["CertificateSummaryList"]) == 1
 
-    domain = storage.get_domain("*.moto.com")
-    assert domain.name == resp["CertificateSummaryList"][0]["DomainName"]
-    assert domain.acm_arn == resp["CertificateSummaryList"][0]["CertificateArn"]
+    assert (
+        observer._acm_arn_resolver.get("*.moto.com")
+        == resp["CertificateSummaryList"][0]["CertificateArn"]
+    )
+    assert resp["CertificateSummaryList"][0]["DomainName"] == "*.moto.com"
 
 
 def test_s3_find_expired(bucket, acm, moto_certs):
     key_pem, fullchain_pem = moto_certs
-    storage = ACMStorage(bucket=bucket, acm=acm)
+    storage = S3Storage(bucket=bucket)
+    storage.subscribe(ACMStorageObserver(acm=acm))
     storage.set_certificate(Domain("*.example.com", key=key_pem), fullchain_pem)
     now = datetime.datetime.utcnow().replace(tzinfo=tzutc())
     assert not list(find_certificates_to_renew(storage))

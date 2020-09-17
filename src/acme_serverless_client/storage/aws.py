@@ -5,15 +5,10 @@ import typing
 import botocore.exceptions
 
 from ..models import Domain
-from .base import BaseStorage
-
-if typing.TYPE_CHECKING:
-    BaseMixin = BaseStorage
-else:
-    BaseMixin = object
+from .base import BaseStorage, StorageObserverProtocol
 
 
-class S3StorageMixin(BaseMixin):
+class S3Storage(BaseStorage):
     class Bucket:
         def __init__(self, name: str, client: typing.Any):
             self.name = name
@@ -77,20 +72,25 @@ class S3StorageMixin(BaseMixin):
         self._set(key, value)
 
 
-class ACMStorageMixin(BaseMixin):
+class ACMStorageObserver(StorageObserverProtocol):
     ACM_TAG = "lambda-acme"
 
     class ARNResolver:
         def __init__(self, client: typing.Any):
             self.client = client
-            self._store: typing.Optional[typing.Mapping[str, str]] = None
+            self._store: typing.Optional[typing.MutableMapping[str, str]] = None
 
         def get(self, domain_name: str) -> typing.Optional[str]:
             if self._store is None:
                 self._store = self._fetch_acm_certificates()
             return self._store.get(domain_name)
 
-        def _fetch_acm_certificates(self) -> typing.Mapping[str, str]:
+        def set(self, domain_name: str, acm_arn: str) -> None:
+            if self._store is None:
+                self._store = self._fetch_acm_certificates()
+            self._store[domain_name] = acm_arn
+
+        def _fetch_acm_certificates(self) -> typing.MutableMapping[str, str]:
             params: typing.MutableMapping[str, str] = {}
             result = {}
             while True:
@@ -105,8 +105,7 @@ class ACMStorageMixin(BaseMixin):
         self, acm: typing.Any, *args: typing.Any, **kwargs: typing.Any
     ) -> None:
         self.acm = acm
-        self._acm_arn_resolver = ACMStorageMixin.ARNResolver(client=acm)
-        super().__init__(*args, **kwargs)
+        self._acm_arn_resolver = ACMStorageObserver.ARNResolver(client=acm)
 
     @staticmethod
     def _extract_certificate(fullchain_pem: bytes) -> typing.Tuple[bytes, bytes]:
@@ -114,38 +113,26 @@ class ACMStorageMixin(BaseMixin):
         part1, part2, chain = fullchain_pem.decode().partition(sep)
         return (part1 + part2).encode(), chain.lstrip().encode()
 
-    def get_domain(self, name: str, **kwargs: typing.Any,) -> Domain:
-        acm_arn = self._acm_arn_resolver.get(name)
-        return super().get_domain(name=name, acm_arn=acm_arn, **kwargs)
-
     def set_certificate(self, domain: Domain, fullchain_pem: bytes) -> None:
-        cert, chain = ACMStorageMixin._extract_certificate(fullchain_pem)
+        cert, chain = ACMStorageObserver._extract_certificate(fullchain_pem)
         kwargs = {
             "Certificate": cert,
             "PrivateKey": domain.key,
             "CertificateChain": chain,
             "Tags": [{"Key": self.ACM_TAG}],
         }
-        if domain.acm_arn:
-            kwargs["CertificateArn"] = domain.acm_arn
-        domain.acm_arn = self.acm.import_certificate(**kwargs)["CertificateArn"]
-        if "CertificateArn" not in kwargs and self._acm_arn_resolver._store is not None:
-            self._acm_arn_resolver._store[domain.name] = domain.acm_arn  # type: ignore
-        super().set_certificate(domain, fullchain_pem)
+        acm_arn = self._acm_arn_resolver.get(domain.name)
+        if acm_arn:
+            kwargs["CertificateArn"] = acm_arn
+        response = self.acm.import_certificate(**kwargs)
+        if not acm_arn:
+            self._acm_arn_resolver.set(domain.name, response["CertificateArn"])
 
     def remove_domain(self, domain: Domain) -> None:
         """
         Remove certificate from ACM.
         Will fail with ResourceInUseException if it in use.
         """
-        if domain.acm_arn:
-            self.acm.delete_certificate(CertificateArn=domain.acm_arn)
-        super().remove_domain(domain)
-
-
-class S3Storage(S3StorageMixin, BaseStorage):
-    pass
-
-
-class ACMStorage(ACMStorageMixin, S3StorageMixin, BaseStorage):
-    pass
+        acm_arn = self._acm_arn_resolver.get(domain.name)
+        if acm_arn:
+            self.acm.delete_certificate(CertificateArn=acm_arn)

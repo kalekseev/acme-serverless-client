@@ -48,7 +48,12 @@ lint:
 	flake8 src/
 	isort src/
 	black src/
-	mypy --strict --ignore-missing-imports --allow-untyped-decorators --follow-imports skip src/ example/index.py
+	mypy --strict \
+		--ignore-missing-imports \
+		--allow-untyped-decorators \
+		--follow-imports skip \
+		--warn-unreachable \
+		src/ example/index.py
 
 test:
 	PATH=./services:$(PATH) PYTHONPATH=./src PEBBLE_VA_NOSLEEP=1 py.test \
