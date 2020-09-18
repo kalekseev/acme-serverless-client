@@ -5,8 +5,8 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
 from acme_serverless_client import issue_or_renew, revoke
+from acme_serverless_client.authenticators.dns_route_53 import Route53Authenticator
 from acme_serverless_client.authenticators.http_storage import StorageAuthenticator
-from acme_serverless_client.models import Domain
 from acme_serverless_client.storage.aws import ACMStorageObserver, S3Storage
 
 
@@ -29,13 +29,13 @@ def test_acm_issue_renew_revoke(minio_bucket, full_infra, acm, acme_directory_ur
 
     auth = StorageAuthenticator(storage=storage)
     issue_or_renew(
-        domain_name,
+        [domain_name],
         storage,
         acme_directory_url=acme_directory_url,
         acme_account_email="fake@example.com",
         authenticators=[auth],
     )
-    pem_data = storage.get_certificate(Domain(domain_name))
+    pem_data = storage.get_certificate([domain_name]).fullchain
     assert pem_data
     cert = x509.load_pem_x509_certificate(pem_data, default_backend())
     assert cert.subject.rfc4514_string() == f"CN={domain_name}"
@@ -46,13 +46,13 @@ def test_acm_issue_renew_revoke(minio_bucket, full_infra, acm, acme_directory_ur
     assert acm_arn
 
     issue_or_renew(
-        domain_name,
+        [domain_name],
         storage,
         acme_directory_url=acme_directory_url,
         acme_account_email="fake@example.com",
         authenticators=[auth],
     )
-    pem_data = storage.get_certificate(Domain(domain_name))
+    pem_data = storage.get_certificate([domain_name]).fullchain
     assert pem_data
     cert = x509.load_pem_x509_certificate(pem_data, default_backend())
     assert cert.subject.rfc4514_string() == f"CN={domain_name}"
@@ -63,9 +63,38 @@ def test_acm_issue_renew_revoke(minio_bucket, full_infra, acm, acme_directory_ur
     assert acm_arn == new_acm_arn
 
     revoke(
-        domain_name,
+        [domain_name],
         storage,
         acme_directory_url=acme_directory_url,
         acme_account_email="fake@example.com",
     )
-    assert storage.get_certificate(Domain(domain_name)) is None
+    assert storage.get_certificate([domain_name]) is None
+
+
+def test_san_mixed(
+    get_dns_txt_records, acme_directory_url, minio_bucket, pebble, full_infra, r53
+):
+    storage = S3Storage(bucket=minio_bucket)
+    domains = ["*.example.com", "fake.com", "www.fake.com"]
+
+    dns_auth = Route53Authenticator(
+        r53, {"example.com": "ZONEID2", "www.fake.com": "ZONEID2"}
+    )
+    http_auth = StorageAuthenticator(storage=storage)
+    issue_or_renew(
+        domains,
+        storage,
+        acme_directory_url=acme_directory_url,
+        acme_account_email="fake@example.com",
+        authenticators=[dns_auth, http_auth],
+    )
+    pem_data = storage.get_certificate(domains).fullchain
+    assert pem_data
+    cert = x509.load_pem_x509_certificate(pem_data, default_backend())
+    assert cert.subject.rfc4514_string() == f"CN={domains[0]}"
+    sans = cert.extensions.get_extension_for_class(
+        x509.extensions.SubjectAlternativeName
+    ).value
+    assert [x.value for x in sans] == domains
+    valid_from = cert.not_valid_before
+    assert datetime.datetime.now() > valid_from

@@ -18,7 +18,7 @@ def load_certificate(pem: bytes) -> bytes:
     )
 
 
-def generate_domain_key() -> bytes:
+def generate_private_key() -> bytes:
     pkey = OpenSSL.crypto.PKey()
     pkey.generate_key(OpenSSL.crypto.TYPE_RSA, CERT_PKEY_BITS)
     return typing.cast(

@@ -7,16 +7,54 @@ from acme import messages
 from . import crypto
 
 
-class Domain:
-    def __init__(self, name: str, key: typing.Optional[bytes] = None) -> None:
-        self.name = name
-        self._key = key
+class CertificateNotSet(Exception):
+    pass
+
+
+class Certificate:
+    def __init__(self, domains: typing.Sequence[str], private_key: bytes,) -> None:
+        self.domains = list(domains)
+        self.private_key = private_key
+        self._certificate: typing.Optional[bytes] = None
+        self._certificate_chain: typing.Optional[bytes] = None
+
+    @classmethod
+    def generate_private_key(self) -> bytes:
+        return crypto.generate_private_key()
 
     @property
-    def key(self) -> bytes:
-        if not self._key:
-            self._key = crypto.generate_domain_key()
-        return self._key
+    def name(self) -> str:
+        return self.domains[0]
+
+    @property
+    def certificate(self) -> bytes:
+        if not self._certificate:
+            raise CertificateNotSet()
+        return self._certificate
+
+    @property
+    def certificate_chain(self) -> bytes:
+        if not self._certificate_chain:
+            raise CertificateNotSet()
+        return self._certificate_chain
+
+    @property
+    def fullchain(self) -> bytes:
+        return self.certificate + self.certificate_chain
+
+    @property
+    def is_fullchain_set(self) -> bool:
+        try:
+            self.certificate
+        except CertificateNotSet:
+            return False
+        return True
+
+    def set_fullchain(self, fullchain_pem: bytes) -> None:
+        sep = "-----END CERTIFICATE-----\n"
+        part1, part2, chain = fullchain_pem.decode().partition(sep)
+        self._certificate = (part1 + part2).encode()
+        self._certificate_chain = chain.lstrip().encode()
 
 
 class Account:

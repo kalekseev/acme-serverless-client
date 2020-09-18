@@ -1,76 +1,17 @@
 import datetime
 import json
-import subprocess
 
 import acme
-import pytest
 import urllib3
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
 from acme_serverless_client import issue_or_renew
 from acme_serverless_client.authenticators.dns_route_53 import Route53Authenticator
-from acme_serverless_client.models import Domain
 from acme_serverless_client.storage.aws import S3Storage
 
 
-@pytest.fixture
-def get_dns_txt_records(pebble_settings, challtestsrv):
-    def f(domain):
-        r = subprocess.check_output(
-            [
-                "dig",
-                "+short",
-                "-t",
-                "txt",
-                domain,
-                "@127.0.0.1",
-                "-p",
-                str(pebble_settings["DNS_PORT"]),
-            ]
-        )
-        return r.decode().strip().split()
-
-    return f
-
-
-class Route53BotoProxy:
-    def __init__(self):
-        self._zone_changes = {}
-
-    def change_resource_record_sets(self, HostedZoneId, ChangeBatch):
-        http = urllib3.PoolManager()
-        for change in ChangeBatch["Changes"]:
-            domain = change["ResourceRecordSet"]["Name"]
-            data = {"host": domain}
-            if change["Action"] == "UPSERT":
-                for value in change["ResourceRecordSet"]["ResourceRecords"]:
-                    data["value"] = value["Value"].strip('"')
-                    r = http.request(
-                        "POST",
-                        "http://localhost:8055/set-txt",
-                        body=json.dumps(data).encode(),
-                        headers={"Content-Type": "application/json"},
-                    )
-                    assert r.status == 200
-            elif change["Action"] == "DELETE":
-                r = http.request(
-                    "POST",
-                    "http://localhost:8055/clear-txt",
-                    body=json.dumps(data).encode(),
-                    headers={"Content-Type": "application/json"},
-                )
-                assert r.status == 200
-            else:
-                raise ValueError(f"Unknown action: {change['Action']}")
-        return {"ChangeInfo": {"Id": "random"}}
-
-    def get_change(self, Id):
-        return {"ChangeInfo": {"Status": "INSYNC"}}
-
-
-def test_route53_boto_proxy(get_dns_txt_records):
-    r53 = Route53BotoProxy()
+def test_route53_boto_proxy(get_dns_txt_records, r53):
     batch = {
         "Comment": "acme-serverless-client certificate validation UPSERT",
         "Changes": [
@@ -172,12 +113,11 @@ def test_authenticator_zones():
 
 
 def test_dns01(
-    get_dns_txt_records, acme_directory_url, minio_bucket, pebble, disable_ssl
+    get_dns_txt_records, acme_directory_url, minio_bucket, pebble, disable_ssl, r53
 ):
     storage = S3Storage(bucket=minio_bucket)
     domain_name = "*.example.com"
 
-    r53 = Route53BotoProxy()
     auth = Route53Authenticator(
         r53,
         {
@@ -187,15 +127,43 @@ def test_dns01(
         },
     )
     issue_or_renew(
-        domain_name,
+        [domain_name],
         storage,
         acme_directory_url=acme_directory_url,
         acme_account_email="fake@example.com",
         authenticators=[auth],
     )
-    pem_data = storage.get_certificate(Domain(domain_name))
+    pem_data = storage.get_certificate([domain_name]).fullchain
     assert pem_data
     cert = x509.load_pem_x509_certificate(pem_data, default_backend())
     assert cert.subject.rfc4514_string() == f"CN={domain_name}"
+    valid_from = cert.not_valid_before
+    assert datetime.datetime.now() > valid_from
+
+
+def test_san_dns01(
+    get_dns_txt_records, acme_directory_url, minio_bucket, pebble, full_infra, r53
+):
+    storage = S3Storage(bucket=minio_bucket)
+    domains = ["*.example.com", "www.fake.com"]
+
+    dns_auth = Route53Authenticator(
+        r53, {"example.com": "ZONEID2", "www.fake.com": "ZONEID2"}
+    )
+    issue_or_renew(
+        domains,
+        storage,
+        acme_directory_url=acme_directory_url,
+        acme_account_email="fake@example.com",
+        authenticators=[dns_auth],
+    )
+    pem_data = storage.get_certificate(domains).fullchain
+    assert pem_data
+    cert = x509.load_pem_x509_certificate(pem_data, default_backend())
+    assert cert.subject.rfc4514_string() == f"CN={domains[0]}"
+    sans = cert.extensions.get_extension_for_class(
+        x509.extensions.SubjectAlternativeName
+    ).value
+    assert [x.value for x in sans] == domains
     valid_from = cert.not_valid_before
     assert datetime.datetime.now() > valid_from

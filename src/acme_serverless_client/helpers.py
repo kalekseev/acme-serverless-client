@@ -13,12 +13,3 @@ def find_certificates_to_renew(
         fresh_before = valid_after + datetime.timedelta(days=cert_fresh_days)
         if now > fresh_before:
             yield (domain_name, valid_after)
-
-
-def get_domain_data(
-    storage: BaseStorage, domain_name: str
-) -> typing.Tuple[bytes, bytes]:
-    domain = storage.get_domain(domain_name)
-    cert = storage.get_certificate(domain)
-    assert cert, f"Certificate for `{domain_name}` not found."
-    return cert, domain.key

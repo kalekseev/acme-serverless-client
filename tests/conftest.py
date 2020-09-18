@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler
 
 import boto3
 import pytest
+import urllib3
 from acme.standalone import BaseDualNetworkedServers, HTTPServer
 from botocore.client import Config
 from moto import mock_acm, mock_s3
@@ -275,3 +276,63 @@ def challtestsrv(pebble_settings) -> typing.Iterator[None]:
 @pytest.fixture()
 def full_infra(pebble, challtestsrv, minio, load_balancer, acm, disable_ssl):
     pass
+
+
+@pytest.fixture
+def get_dns_txt_records(pebble_settings, challtestsrv):
+    def f(domain):
+        r = subprocess.check_output(
+            [
+                "dig",
+                "+short",
+                "-t",
+                "txt",
+                domain,
+                "@127.0.0.1",
+                "-p",
+                str(pebble_settings["DNS_PORT"]),
+            ]
+        )
+        return r.decode().strip().split()
+
+    return f
+
+
+class Route53BotoProxy:
+    def __init__(self):
+        self._zone_changes = {}
+
+    def change_resource_record_sets(self, HostedZoneId, ChangeBatch):
+        http = urllib3.PoolManager()
+        for change in ChangeBatch["Changes"]:
+            domain = change["ResourceRecordSet"]["Name"]
+            data = {"host": domain}
+            if change["Action"] == "UPSERT":
+                for value in change["ResourceRecordSet"]["ResourceRecords"]:
+                    data["value"] = value["Value"].strip('"')
+                    r = http.request(
+                        "POST",
+                        "http://localhost:8055/set-txt",
+                        body=json.dumps(data).encode(),
+                        headers={"Content-Type": "application/json"},
+                    )
+                    assert r.status == 200
+            elif change["Action"] == "DELETE":
+                r = http.request(
+                    "POST",
+                    "http://localhost:8055/clear-txt",
+                    body=json.dumps(data).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+                assert r.status == 200
+            else:
+                raise ValueError(f"Unknown action: {change['Action']}")
+        return {"ChangeInfo": {"Id": "random"}}
+
+    def get_change(self, Id):
+        return {"ChangeInfo": {"Status": "INSYNC"}}
+
+
+@pytest.fixture
+def r53():
+    return Route53BotoProxy()

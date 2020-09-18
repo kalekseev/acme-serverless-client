@@ -4,7 +4,7 @@ import typing
 
 import botocore.exceptions
 
-from ..models import Domain
+from ..models import Certificate
 from .base import BaseStorage, StorageObserverProtocol
 
 
@@ -110,32 +110,25 @@ class ACMStorageObserver(StorageObserverProtocol):
         self.acm = acm
         self._acm_arn_resolver = ACMStorageObserver.ARNResolver(client=acm)
 
-    @staticmethod
-    def _extract_certificate(fullchain_pem: bytes) -> typing.Tuple[bytes, bytes]:
-        sep = "-----END CERTIFICATE-----\n"
-        part1, part2, chain = fullchain_pem.decode().partition(sep)
-        return (part1 + part2).encode(), chain.lstrip().encode()
-
-    def set_certificate(self, domain: Domain, fullchain_pem: bytes) -> None:
-        cert, chain = ACMStorageObserver._extract_certificate(fullchain_pem)
+    def save_certificate(self, certificate: Certificate) -> None:
         kwargs = {
-            "Certificate": cert,
-            "PrivateKey": domain.key,
-            "CertificateChain": chain,
+            "Certificate": certificate.certificate,
+            "PrivateKey": certificate.private_key,
+            "CertificateChain": certificate.certificate_chain,
             "Tags": [{"Key": self.ACM_TAG}],
         }
-        acm_arn = self._acm_arn_resolver.get(domain.name)
+        acm_arn = self._acm_arn_resolver.get(certificate.name)
         if acm_arn:
             kwargs["CertificateArn"] = acm_arn
         response = self.acm.import_certificate(**kwargs)
         if not acm_arn:
-            self._acm_arn_resolver.set(domain.name, response["CertificateArn"])
+            self._acm_arn_resolver.set(certificate.name, response["CertificateArn"])
 
-    def remove_domain(self, domain: Domain) -> None:
+    def remove_certificate(self, certificate: Certificate) -> None:
         """
         Remove certificate from ACM.
         Will fail with ResourceInUseException if it in use.
         """
-        acm_arn = self._acm_arn_resolver.get(domain.name)
+        acm_arn = self._acm_arn_resolver.get(certificate.name)
         if acm_arn:
             self.acm.delete_certificate(CertificateArn=acm_arn)

@@ -1,15 +1,16 @@
 import datetime
+import json
 import typing
 from typing import Protocol
 
-from ..models import Account, Domain
+from ..models import Account, Certificate
 
 
 class ObserverEventsProtocol(Protocol):
-    def set_certificate(self, domain: Domain, fullchain_pem: bytes) -> None:
+    def save_certificate(self, certificate: Certificate) -> None:
         ...
 
-    def remove_domain(self, domain: Domain) -> None:
+    def remove_certificate(self, certificate: Certificate) -> None:
         ...
 
 
@@ -22,7 +23,10 @@ class AuthenticatorStorageProtocol(Protocol):
 
 
 class StorageProtocol(ObserverEventsProtocol, Protocol):
-    def get_domain(self, name: str) -> Domain:
+    def get_account(self) -> typing.Optional[Account]:
+        ...
+
+    def set_account(self, account: Account) -> None:
         ...
 
     def list_certificates(
@@ -30,32 +34,29 @@ class StorageProtocol(ObserverEventsProtocol, Protocol):
     ) -> typing.Iterator[typing.Tuple[str, datetime.datetime]]:
         ...
 
-    def get_account(self) -> typing.Optional[Account]:
-        ...
-
-    def set_account(self, account: Account) -> None:
-        ...
-
-    def get_certificate(self, domain: Domain) -> typing.Optional[bytes]:
+    def get_certificate(
+        self, domains: typing.Sequence[str]
+    ) -> typing.Optional[Certificate]:
         ...
 
 
-StorageEvent = typing.Literal["set_certificate", "remove_domain"]
+StorageEvent = typing.Literal["save_certificate", "remove_certificate"]
 
 
 class StorageObserverProtocol(ObserverEventsProtocol, Protocol):
     def notify(
         self, event: StorageEvent, *args: typing.Any, **kwargs: typing.Any
     ) -> None:
-        if event == "set_certificate":
-            self.set_certificate(*args, **kwargs)
-        elif event == "remove_domain":
-            self.remove_domain(*args, **kwargs)
+        if event == "save_certificate":
+            self.save_certificate(*args, **kwargs)
+        elif event == "remove_certificate":
+            self.remove_certificate(*args, **kwargs)
 
 
 class BaseStorage:
     certificate_prefix = "certificates/"
     key_prefix = "keys/"
+    config_prefix = "configs/"
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         self._subscribers: typing.Set[StorageObserverProtocol] = set()
@@ -67,6 +68,10 @@ class BaseStorage:
     @classmethod
     def _build_key_storage_key(self, domain_name: str) -> str:
         return f"{self.key_prefix}{domain_name}"
+
+    @classmethod
+    def _build_config_storage_key(self, domain_name: str) -> str:
+        return f"{self.config_prefix}{domain_name}"
 
     def _get(self, name: str) -> typing.Optional[bytes]:
         raise NotImplementedError()
@@ -86,18 +91,6 @@ class BaseStorage:
     def subscribe(self, observer: StorageObserverProtocol) -> None:
         self._subscribers.add(observer)
 
-    def get_domain(self, name: str) -> Domain:
-        key = self._get(self._build_key_storage_key(name))
-        domain = Domain(name=name, key=key)
-        if not key:
-            self._set(self._build_key_storage_key(name), domain.key)
-        return domain
-
-    def list_certificates(
-        self,
-    ) -> typing.Iterator[typing.Tuple[str, datetime.datetime]]:
-        raise NotImplementedError()
-
     def get_account(self) -> typing.Optional[Account]:
         data = self._get("account.json")
         if data:
@@ -107,14 +100,45 @@ class BaseStorage:
     def set_account(self, account: Account) -> None:
         return self._set("account.json", account.json_dumps().encode())
 
-    def get_certificate(self, domain: Domain) -> typing.Optional[bytes]:
-        return self._get(self._build_certificate_storage_key(domain.name))
+    def list_certificates(
+        self,
+    ) -> typing.Iterator[typing.Tuple[str, datetime.datetime]]:
+        raise NotImplementedError()
 
-    def set_certificate(self, domain: Domain, fullchain_pem: bytes) -> None:
-        self._set(self._build_certificate_storage_key(domain.name), fullchain_pem)
-        self._notify("set_certificate", domain, fullchain_pem)
+    def get_certificate(
+        self, domains: typing.Sequence[str]
+    ) -> typing.Optional[Certificate]:
+        config_data = self._get(self._build_config_storage_key(domains[0]))
+        if not config_data:
+            return None
+        config = json.loads(config_data)
+        if config["domains"] != domains:
+            return None
+        private_key = self._get(self._build_key_storage_key(domains[0]))
+        if not private_key:
+            return None
+        cert = Certificate(domains=domains, private_key=private_key)
+        fullchain_pem = self._get(self._build_certificate_storage_key(domains[0]))
+        if fullchain_pem:
+            cert.set_fullchain(fullchain_pem)
+        return cert
 
-    def remove_domain(self, domain: Domain) -> None:
-        self._del(self._build_certificate_storage_key(domain.name))
-        self._del(self._build_key_storage_key(domain.name))
-        self._notify("remove_domain", domain)
+    def save_certificate(self, certificate: Certificate) -> None:
+        assert certificate.is_fullchain_set
+        self._set(
+            self._build_config_storage_key(certificate.name),
+            json.dumps({"domains": certificate.domains}).encode(),
+        )
+        self._set(
+            self._build_key_storage_key(certificate.name), certificate.private_key
+        )
+        self._set(
+            self._build_certificate_storage_key(certificate.name), certificate.fullchain
+        )
+        self._notify("save_certificate", certificate)
+
+    def remove_certificate(self, certconfig: Certificate) -> None:
+        self._del(self._build_certificate_storage_key(certconfig.name))
+        self._del(self._build_key_storage_key(certconfig.name))
+        self._del(self._build_config_storage_key(certconfig.name))
+        self._notify("remove_certificate", certconfig)

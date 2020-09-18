@@ -10,7 +10,7 @@ from acme import crypto_util, errors, messages
 
 from . import crypto
 from .authenticators.base import AuthenticatorProtocol
-from .models import Account, Domain
+from .models import Account, Certificate
 
 if typing.TYPE_CHECKING:
     from .storage.base import StorageProtocol
@@ -76,53 +76,52 @@ def setup_client(
 def perform(
     client_acme: acme.client.ClientV2,
     challs: typing.Iterable[typing.Tuple[typing.Any, str]],
-    orderr: messages.OrderResource,
     authenticator: AuthenticatorProtocol,
-) -> bytes:
+) -> None:
     account_key = client_acme.net.key
     authenticator.perform(challs, account_key)
     for challb, _ in challs:
         client_acme.answer_challenge(challb, challb.response(account_key))
-    finalized_orderr = client_acme.poll_and_finalize(orderr)
-
-    return typing.cast(bytes, finalized_orderr.fullchain_pem.encode("utf8"))
 
 
 def issue_or_renew(
-    domain_name: str,
+    domains: typing.Sequence[str],
     storage: "StorageProtocol",
     acme_account_email: str,
     acme_directory_url: str,
     authenticators: typing.Sequence[AuthenticatorProtocol],
 ) -> None:
-    domain = storage.get_domain(name=domain_name)
+    certificate = storage.get_certificate(domains=domains) or Certificate(
+        domains=domains, private_key=Certificate.generate_private_key()
+    )
     client = setup_client(
         storage=storage,
         directory_url=acme_directory_url,
         account_email=acme_account_email,
     )
 
-    orderr = client.new_order(crypto_util.make_csr(domain.key, [domain.name]))
+    orderr = client.new_order(
+        crypto_util.make_csr(certificate.private_key, certificate.domains)
+    )
     auth_challs = select_challs(orderr, authenticators)
     for authenticator, challs in auth_challs:
-        fullchain_pem = perform(client, challs, orderr, authenticator)
-    storage.set_certificate(domain, fullchain_pem)
+        perform(client, challs, authenticator)
+    finalized_orderr = client.poll_and_finalize(orderr)
+    fullchain_pem = typing.cast(bytes, finalized_orderr.fullchain_pem.encode("utf8"))
+    certificate.set_fullchain(fullchain_pem)
+    storage.save_certificate(certificate)
 
 
 def revoke(
-    domain_name: str,
+    domains: typing.Sequence[str],
     storage: "StorageProtocol",
     acme_account_email: str,
     acme_directory_url: str,
 ) -> None:
-    # just check if we have cert for that domain
-    fullchain_pem = storage.get_certificate(Domain(name=domain_name))
-    if not fullchain_pem:
-        raise RuntimeError(f"[REVOKE] {domain_name} certificate not found.")
-    # now construct a real domain object
-    domain = storage.get_domain(name=domain_name)
-    storage.remove_domain(domain)
-    fullchain_com = crypto.load_certificate(fullchain_pem)
+    certificate = storage.get_certificate(domains=domains)
+    if not certificate:
+        raise RuntimeError(f"[REVOKE] {domains} certificate not found.")
+    fullchain_com = crypto.load_certificate(certificate.fullchain)
     client = setup_client(
         storage=storage,
         directory_url=acme_directory_url,
@@ -131,4 +130,6 @@ def revoke(
     try:
         client.revoke(fullchain_com, rsn=0)
     except errors.ConflictError:
-        raise RuntimeError(f"[REVOKE] {domain_name} certificate already revoked.")
+        raise RuntimeError(f"[REVOKE] {domains} certificate already revoked.")
+    finally:
+        storage.remove_certificate(certificate)
