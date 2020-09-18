@@ -35,7 +35,10 @@ class StorageProtocol(ObserverEventsProtocol, Protocol):
         ...
 
     def get_certificate(
-        self, domains: typing.Sequence[str]
+        self,
+        *,
+        domains: typing.Optional[typing.Sequence[str]] = None,
+        name: typing.Optional[str] = None,
     ) -> typing.Optional[Certificate]:
         ...
 
@@ -106,19 +109,30 @@ class BaseStorage:
         raise NotImplementedError()
 
     def get_certificate(
-        self, domains: typing.Sequence[str]
+        self,
+        *,
+        domains: typing.Optional[typing.Sequence[str]] = None,
+        name: typing.Optional[str] = None,
     ) -> typing.Optional[Certificate]:
-        config_data = self._get(self._build_config_storage_key(domains[0]))
+        assert domains or name, "domains or name is required."
+        if domains:
+            if name:
+                assert (
+                    domains[0] == name
+                ), "first entry in domains must be equal to name."
+            name = domains[0]
+        assert name  # fix typing
+        config_data = self._get(self._build_config_storage_key(name))
         if not config_data:
             return None
         config = json.loads(config_data)
-        if config["domains"] != domains:
+        if domains is not None and config["domains"] != domains:
             return None
-        private_key = self._get(self._build_key_storage_key(domains[0]))
+        private_key = self._get(self._build_key_storage_key(name))
         if not private_key:
             return None
-        cert = Certificate(domains=domains, private_key=private_key)
-        fullchain_pem = self._get(self._build_certificate_storage_key(domains[0]))
+        cert = Certificate(domains=config["domains"], private_key=private_key)
+        fullchain_pem = self._get(self._build_certificate_storage_key(name))
         if fullchain_pem:
             cert.set_fullchain(fullchain_pem)
         return cert

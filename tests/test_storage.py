@@ -51,22 +51,22 @@ def test_get_certificate():
             "certificates/*.my.com": b"randomcert-----END CERTIFICATE-----\nchain",
         }
     )
-    certificate = storage.get_certificate(["*.my.com"])
+    certificate = storage.get_certificate(domains=["*.my.com"])
     assert certificate
     assert certificate.private_key == b"randomprivatekey"
     assert certificate.fullchain == b"randomcert-----END CERTIFICATE-----\nchain"
-    assert storage.get_certificate(["*.my.com", "example.com"]) is None
+    assert storage.get_certificate(domains=["*.my.com", "example.com"]) is None
 
 
 def test_set_certificate():
     storage = FakeStorage()
-    assert storage.get_certificate(["my.com"]) is None
+    assert storage.get_certificate(domains=["my.com"]) is None
     certificate = Certificate(
         ["my.com"], private_key=Certificate.generate_private_key()
     )
     certificate.set_fullchain(b"randomcert-----END CERTIFICATE-----\nchain")
     storage.save_certificate(certificate)
-    cert = storage.get_certificate(["my.com"])
+    cert = storage.get_certificate(domains=["my.com"])
     assert cert
     assert storage._data == {
         "keys/my.com": certificate.private_key,
@@ -159,11 +159,11 @@ def test_s3_find_expired(bucket, acm, moto_certs):
     with time_machine.travel(now + datetime.timedelta(days=61)):
         certs = list(find_certificates_to_renew(storage))
         assert len(certs) == 1
-        assert certs[0][0] == "*.example.com"
+        assert certs[0][0].name == "*.example.com"
     with time_machine.travel(now + datetime.timedelta(days=356)):
         certs = list(find_certificates_to_renew(storage))
         assert len(certs) == 1
-        assert certs[0][0] == "*.example.com"
+        assert certs[0][0].name == "*.example.com"
     with time_machine.travel(now + datetime.timedelta(days=90)):
         certificate = Certificate(["new.example.com"], private_key=key_pem)
         certificate.set_fullchain(fullchain_pem)

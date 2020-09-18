@@ -1,3 +1,4 @@
-from .client import issue_or_renew, revoke
+from .client import issue, renew, revoke
+from .helpers import find_certificates_to_renew
 
-__all__ = ["revoke", "issue_or_renew"]
+__all__ = ["revoke", "issue", "renew", "find_certificates_to_renew"]

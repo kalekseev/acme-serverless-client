@@ -6,7 +6,7 @@ from ..storage.base import AuthenticatorStorageProtocol
 from .base import AuthenticatorProtocol
 
 
-class StorageAuthenticator(AuthenticatorProtocol):
+class HTTP01Authenticator(AuthenticatorProtocol):
     def __init__(self, storage: AuthenticatorStorageProtocol):
         self._storage = storage
 

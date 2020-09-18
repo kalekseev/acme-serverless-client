@@ -4,9 +4,8 @@ import typing
 
 import boto3
 
-from acme_serverless_client import issue_or_renew, revoke
-from acme_serverless_client.authenticators.http_storage import StorageAuthenticator
-from acme_serverless_client.helpers import find_certificates_to_renew
+from acme_serverless_client import find_certificates_to_renew, issue, renew, revoke
+from acme_serverless_client.authenticators.http import HTTP01Authenticator
 from acme_serverless_client.storage.aws import S3Storage
 
 logger = logging.getLogger("aws-lambda-acme")
@@ -29,30 +28,30 @@ if os.environ.get("SENTRY_DSN"):
 def handler(event: typing.Any, context: typing.Any) -> typing.Mapping[str, typing.Any]:
     client = boto3.client("s3")
     storage = S3Storage(bucket=S3Storage.Bucket(os.environ["BUCKET"], client))
+    authenticators = [HTTP01Authenticator(storage=storage)]
     params: typing.Any = {
         "acme_account_email": os.environ["ACME_ACCOUNT_EMAIL"],
         "acme_directory_url": os.environ["ACME_DIRECTORY_URL"],
         "storage": storage,
-        "authenticators": [StorageAuthenticator(storage=storage)],
     }
     if event["action"] == "renew":
-        domains = [domain for domain, _ in find_certificates_to_renew(storage)]
+        certificates = [
+            certificate for certificate, _ in find_certificates_to_renew(storage)
+        ]
         failure = []
-        for domain in domains:
+        for certificate in certificates:
             try:
-                issue_or_renew(
-                    domain, **params,
-                )
+                renew(certificate=certificate, authenticators=authenticators, **params)
             except Exception as exc:
                 logger.error(str(exc))
-                failure.append(domain)
-        if len(failure) == len(domains):
-            raise RuntimeError(f"All operations failed: {failure}")
+                failure.append(certificate.name)
+        if len(failure) == len(certificates):
+            raise RuntimeError(f"All renew operations failed: {failure}")
     elif event["action"] == "issue":
-        issue_or_renew(
-            event["domain"], **params,
-        )
+        issue(domains=[event["domain"]], authenticators=authenticators, **params)
     elif event["action"] == "revoke":
-        revoke(event["domain"], storage, **params)
+        cert = storage.get_certificate(name=event["domain"])
+        assert cert
+        revoke(certificate=cert, **params)
 
     return {"statusCode": 200}

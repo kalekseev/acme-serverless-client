@@ -6,7 +6,7 @@ import urllib3
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
-from acme_serverless_client import issue_or_renew
+from acme_serverless_client import issue
 from acme_serverless_client.authenticators.dns_route_53 import Route53Authenticator
 from acme_serverless_client.storage.aws import S3Storage
 
@@ -126,14 +126,14 @@ def test_dns01(
             "my.example.org": "ZONEID0",
         },
     )
-    issue_or_renew(
-        [domain_name],
-        storage,
+    issue(
+        domains=[domain_name],
+        storage=storage,
         acme_directory_url=acme_directory_url,
         acme_account_email="fake@example.com",
         authenticators=[auth],
     )
-    pem_data = storage.get_certificate([domain_name]).fullchain
+    pem_data = storage.get_certificate(domains=[domain_name]).fullchain
     assert pem_data
     cert = x509.load_pem_x509_certificate(pem_data, default_backend())
     assert cert.subject.rfc4514_string() == f"CN={domain_name}"
@@ -150,14 +150,14 @@ def test_san_dns01(
     dns_auth = Route53Authenticator(
         r53, {"example.com": "ZONEID2", "www.fake.com": "ZONEID2"}
     )
-    issue_or_renew(
-        domains,
-        storage,
+    issue(
+        domains=domains,
+        storage=storage,
         acme_directory_url=acme_directory_url,
         acme_account_email="fake@example.com",
         authenticators=[dns_auth],
     )
-    pem_data = storage.get_certificate(domains).fullchain
+    pem_data = storage.get_certificate(domains=domains).fullchain
     assert pem_data
     cert = x509.load_pem_x509_certificate(pem_data, default_backend())
     assert cert.subject.rfc4514_string() == f"CN={domains[0]}"

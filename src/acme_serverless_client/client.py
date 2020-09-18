@@ -73,16 +73,13 @@ def setup_client(
     return client
 
 
-def issue_or_renew(
-    domains: typing.Sequence[str],
+def perform(
+    certificate: Certificate,
     storage: "StorageProtocol",
     acme_account_email: str,
     acme_directory_url: str,
     authenticators: typing.Sequence[AuthenticatorProtocol],
 ) -> None:
-    certificate = storage.get_certificate(domains=domains) or Certificate(
-        domains=domains, private_key=Certificate.generate_private_key()
-    )
     client = setup_client(
         storage=storage,
         directory_url=acme_directory_url,
@@ -108,15 +105,42 @@ def issue_or_renew(
             authenticator.cleanup(challs, account_key)
 
 
-def revoke(
+def issue(
+    *,
     domains: typing.Sequence[str],
     storage: "StorageProtocol",
     acme_account_email: str,
     acme_directory_url: str,
+    authenticators: typing.Sequence[AuthenticatorProtocol],
 ) -> None:
-    certificate = storage.get_certificate(domains=domains)
-    if not certificate:
-        raise RuntimeError(f"[REVOKE] {domains} certificate not found.")
+    certificate = Certificate(
+        domains=domains, private_key=Certificate.generate_private_key()
+    )
+    perform(
+        certificate, storage, acme_account_email, acme_directory_url, authenticators
+    )
+
+
+def renew(
+    *,
+    certificate: Certificate,
+    storage: "StorageProtocol",
+    acme_account_email: str,
+    acme_directory_url: str,
+    authenticators: typing.Sequence[AuthenticatorProtocol],
+) -> None:
+    perform(
+        certificate, storage, acme_account_email, acme_directory_url, authenticators
+    )
+
+
+def revoke(
+    *,
+    certificate: Certificate,
+    storage: "StorageProtocol",
+    acme_account_email: str,
+    acme_directory_url: str,
+) -> None:
     fullchain_com = crypto.load_certificate(certificate.fullchain)
     client = setup_client(
         storage=storage,
@@ -126,6 +150,6 @@ def revoke(
     try:
         client.revoke(fullchain_com, rsn=0)
     except errors.ConflictError:
-        raise RuntimeError(f"[REVOKE] {domains} certificate already revoked.")
+        raise RuntimeError(f"[REVOKE] {certificate.name} certificate already revoked.")
     finally:
         storage.remove_certificate(certificate)
