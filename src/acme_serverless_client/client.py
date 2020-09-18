@@ -73,17 +73,6 @@ def setup_client(
     return client
 
 
-def perform(
-    client_acme: acme.client.ClientV2,
-    challs: typing.Iterable[typing.Tuple[typing.Any, str]],
-    authenticator: AuthenticatorProtocol,
-) -> None:
-    account_key = client_acme.net.key
-    authenticator.perform(challs, account_key)
-    for challb, _ in challs:
-        client_acme.answer_challenge(challb, challb.response(account_key))
-
-
 def issue_or_renew(
     domains: typing.Sequence[str],
     storage: "StorageProtocol",
@@ -105,11 +94,18 @@ def issue_or_renew(
     )
     auth_challs = select_challs(orderr, authenticators)
     for authenticator, challs in auth_challs:
-        perform(client, challs, authenticator)
-    finalized_orderr = client.poll_and_finalize(orderr)
-    fullchain_pem = typing.cast(bytes, finalized_orderr.fullchain_pem.encode("utf8"))
-    certificate.set_fullchain(fullchain_pem)
-    storage.save_certificate(certificate)
+        account_key = client.net.key
+        authenticator.perform(challs, account_key)
+        for challb, _ in challs:
+            client.answer_challenge(challb, challb.response(account_key))
+    try:
+        finalized_orderr = client.poll_and_finalize(orderr)
+        fullchain_pem = finalized_orderr.fullchain_pem.encode("utf8")
+        certificate.set_fullchain(fullchain_pem)
+        storage.save_certificate(certificate)
+    finally:
+        for authenticator, challs in auth_challs:
+            authenticator.cleanup(challs, account_key)
 
 
 def revoke(
