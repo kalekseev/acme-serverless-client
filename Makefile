@@ -1,4 +1,4 @@
-PEBBLE_VERSION := 2.3.0
+PEBBLE_VERSION := 2.3.1
 CURL := curl -L -s -S
 PWD := $(shell pwd)
 UNAME_S := $(shell uname -s)
@@ -26,8 +26,7 @@ ifeq ($(UNAME_S),Linux)
 endif
 ifeq ($(UNAME_S),Darwin)
 	go get -u github.com/letsencrypt/pebble/...
-	cd $(GOPATH)/src/github.com/letsencrypt/pebble && go install ./...
-	mv $(GOPATH)/bin/* ./services/
+	cp $(GOPATH)/bin/* ./services/
 endif
 
 services/minio: services

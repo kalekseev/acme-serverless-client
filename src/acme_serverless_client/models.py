@@ -12,7 +12,7 @@ class CertificateNotSet(Exception):
 
 
 class Certificate:
-    def __init__(self, domains: typing.Sequence[str], private_key: bytes,) -> None:
+    def __init__(self, domains: typing.Sequence[str], private_key: bytes) -> None:
         self.domains = list(domains)
         self.private_key = private_key
         self._certificate: typing.Optional[bytes] = None

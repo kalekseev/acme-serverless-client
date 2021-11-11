@@ -107,7 +107,7 @@ class Route53Authenticator(AuthenticatorProtocol):
 
     def _wait_for_change(self, change_id: str) -> None:
         """Wait for a change to be propagated to all Route53 DNS servers.
-           https://docs.aws.amazon.com/Route53/latest/APIReference/API_GetChange.html
+        https://docs.aws.amazon.com/Route53/latest/APIReference/API_GetChange.html
         """
         for _ in range(0, 120):
             response = self.r53.get_change(Id=change_id)

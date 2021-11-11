@@ -49,14 +49,14 @@ def select_challs(
 
 def build_client(account: Account, directory_url: str) -> acme.client.ClientV2:
     net = acme.client.ClientNetwork(
-        key=account.key, account=account.regr, user_agent=USER_AGENT,
+        key=account.key, account=account.regr, user_agent=USER_AGENT
     )
     directory = messages.Directory.from_json(net.get(directory_url).json())
     return acme.client.ClientV2(directory, net=net)
 
 
 def setup_client(
-    storage: "StorageProtocol", account_email: str, directory_url: str,
+    storage: "StorageProtocol", account_email: str, directory_url: str
 ) -> acme.client.ClientV2:
     account = storage.get_account()
     if account:
