@@ -120,6 +120,7 @@ class ACMStorageObserver(StorageObserverProtocol):
         acm_arn = self._acm_arn_resolver.get(certificate.name)
         if acm_arn:
             kwargs["CertificateArn"] = acm_arn
+            del kwargs["Tags"]
         response = self.acm.import_certificate(**kwargs)
         if not acm_arn:
             self._acm_arn_resolver.set(certificate.name, response["CertificateArn"])

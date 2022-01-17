@@ -1,4 +1,5 @@
 import datetime
+from unittest import mock
 
 import acme.messages
 import pytest
@@ -123,7 +124,7 @@ morebytes
     assert certificate.certificate_chain == chain
 
 
-def test_acm_set_certificate(acm, read_fixture, moto_certs):
+def test_acm_set_certificate(acm, read_fixture, moto_certs, monkeypatch):
     key_pem, fullchain_pem = moto_certs
     storage = FakeStorage()
     observer = ACMStorageObserver(acm=acm)
@@ -141,6 +142,20 @@ def test_acm_set_certificate(acm, read_fixture, moto_certs):
         == resp["CertificateSummaryList"][0]["CertificateArn"]
     )
     assert resp["CertificateSummaryList"][0]["DomainName"] == "*.moto.com"
+
+    icmock = mock.Mock()
+    monkeypatch.setattr(acm, "import_certificate", icmock)
+    storage.save_certificate(certificate)
+    resp = acm.list_certificates()
+    assert len(resp["CertificateSummaryList"]) == 1
+    icmock.assert_called_once_with(
+        **{
+            "Certificate": certificate.certificate,
+            "PrivateKey": certificate.private_key,
+            "CertificateChain": certificate.certificate_chain,
+            "CertificateArn": resp["CertificateSummaryList"][0]["CertificateArn"],
+        }
+    )
 
 
 def test_s3_find_expired(bucket, acm, moto_certs):
