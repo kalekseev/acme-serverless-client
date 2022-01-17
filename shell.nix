@@ -1,14 +1,14 @@
 { system ? builtins.currentSystem }:
 let
   pkgsSrc = fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs/archive/a1007637cea374bd1bafd754cfd5388894c49129.tar.gz";
-    sha256 = "sha256:0qnnrn2ahlvxgamwybjafdafaj8mjs6dl91ml5b8bh1v9aj313vl";
+    url = "https://github.com/NixOS/nixpkgs/archive/bacc31ff571ece62147f3ba70cb6d8d8f483a949.tar.gz";
+    sha256 = "1wbgry1as0867bk5mmx3954pya41j34b3g6af4dpah9mh1ai2jc6";
   };
   devshellSrc = fetchTarball {
-    url = "https://github.com/numtide/devshell/archive/26f25a12265f030917358a9632cd600b51af1d97.tar.gz";
-    sha256 = "sha256:0f6fph5gahm2bmzd399mba6b0h6wp6i1v3gryfmgwp0as7mwqpj7";
+    url = "https://github.com/numtide/devshell/archive/f87fb932740abe1c1b46f6edd8a36ade17881666.tar.gz";
+    sha256 = "10cimkql88h7jfjli89i8my8j5la91zm4c78djqlk22dqrxmm6bs";
   };
-  pkgs = import pkgsSrc { };
+  pkgs = import pkgsSrc { inherit system; };
   devshell = import devshellSrc { inherit system pkgs; };
 in
 with pkgs;
@@ -24,11 +24,16 @@ devshell.mkShell {
 
   packages = [
     python39Packages.pip
-    python39Full
+    python39
     pebble
     minio
     go
-  ] ++ lib.optionals stdenv.isLinux [ gcc-unwrapped binutils ];
+  ] ++ lib.optionals stdenv.isLinux [
+    gcc-unwrapped
+    binutils
+  ] ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    clang
+  ];
 
   env = [
     {
@@ -55,17 +60,21 @@ devshell.mkShell {
       name = "CFLAGS";
       value = "-I${openssl.out.dev}/include";
     }
-  ] ++ lib.optionals (stdenv.isLinux) [
-    {
-      name = "LIBRARY_PATH";
-      eval = ''"${glibc.out}/lib"'';
-    }
-  ] ++ lib.optionals (stdenv.isDarwin) [
-    {
-      name = "TMPDIR";
-      value = "/tmp/";
-    }
-  ];
+  ] ++ lib.optionals
+    (stdenv.isLinux)
+    [
+      {
+        name = "LIBRARY_PATH";
+        eval = ''"${glibc.out}/lib"'';
+      }
+    ] ++ lib.optionals
+    (stdenv.isDarwin)
+    [
+      {
+        name = "TMPDIR";
+        value = "/tmp/";
+      }
+    ];
 
   commands = [
     {
