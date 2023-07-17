@@ -16,7 +16,6 @@ class HTTP01Authenticator(AuthenticatorProtocol):
     def perform(
         self, challs: typing.Iterable[typing.Tuple[typing.Any, str]], account_key: str
     ) -> None:
-
         for challb, _ in challs:
             self._storage.set_validation(
                 challb.chall.path, challb.validation(account_key).encode()

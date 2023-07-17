@@ -77,7 +77,7 @@ def test_set_certificate():
 
 
 def test_s3_bucket_ops(bucket):
-    key = "path/to/object.txt"
+    key = ".well-known/acme-challenge/object.txt"
     bucket.put(key, b"testx")
     assert bucket.get(key) == b"testx"
     objects = list(bucket.list())
@@ -90,7 +90,7 @@ def test_s3_bucket_ops(bucket):
 
 def test_s3_mixin_ops(bucket):
     storage = S3Storage(bucket=bucket)
-    key = "keys/example.com"
+    key = ".well-known/acme-challenge/example.com"
     assert storage._get(key) is None
     storage._set(key, b"mybytes")
     assert storage._get(key) == b"mybytes"
@@ -107,7 +107,6 @@ morebytes
 
 
 def test_set_fullchain():
-
     cert = b"""-----BEGIN CERTIFICATE-----
 bytes
 -----END CERTIFICATE-----

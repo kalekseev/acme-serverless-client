@@ -51,7 +51,7 @@ def build_client(account: Account, directory_url: str) -> acme.client.ClientV2:
     net = acme.client.ClientNetwork(
         key=account.key, account=account.regr, user_agent=USER_AGENT
     )
-    directory = messages.Directory.from_json(net.get(directory_url).json())
+    directory = acme.client.ClientV2.get_directory(directory_url, net)
     return acme.client.ClientV2(directory, net=net)
 
 

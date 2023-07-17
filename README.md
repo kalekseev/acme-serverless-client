@@ -12,21 +12,11 @@ To build zip archive for deployment run `make lambda.zip` inside `example` dir.
 
 ## Development
 
-For testing you need these binaries available in your PATH:
+For testing these binaries must be available in PATH:
 
 - dig
 - [pebble](https://github.com/letsencrypt/pebble/releases)
 - [challtestsrv](https://github.com/letsencrypt/pebble/releases)
 - [minio](https://min.io/download)
 
-Run `make services.install` to install them in `./services` direcotry.
-On MacOS you will need `golang` to build pebble.
-
-Envorinment setup with [direnv](https://direnv.net/), .evnrc:
-
-```
-layout python python3.9
-PATH_add ./services
-export PEBBLE_VA_NOSLEEP=1
-export PYTHONPATH=$(pwd)/src
-```
+Run tests with `PEBBLE_VA_NOSLEEP=1 py.test`

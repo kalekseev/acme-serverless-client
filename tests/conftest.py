@@ -170,8 +170,8 @@ def await_port(port: typing.Union[str, int], timeout=4):
 
 @pytest.fixture(scope="session")
 def minio(minio_settings):
-    os.environ["MINIO_ACCESS_KEY"] = minio_settings["ACCESS_KEY"]
-    os.environ["MINIO_SECRET_KEY"] = minio_settings["SECRET_KEY"]
+    os.environ["MINIO_ROOT_USER"] = minio_settings["ACCESS_KEY"]
+    os.environ["MINIO_ROOT_PASSWORD"] = minio_settings["SECRET_KEY"]
     proc = subprocess.Popen(
         [
             "minio",
@@ -234,7 +234,12 @@ def bucket(s3, minio_settings):
                 "Effect": "Allow",
                 "Principal": "*",
                 "Action": ["s3:GetObject"],
-                "Resource": [f"arn:aws:s3:::{name}/.well-known/acme-challenge/*"],
+                "Resource": [
+                    f"arn:aws:s3:::{name}/.well-known/acme-challenge/*",
+                    f"arn:aws:s3:::{name}/certificates/*",
+                    f"arn:aws:s3:::{name}/keys/*",
+                    f"arn:aws:s3:::{name}/configs/*",
+                ],
             }
         ],
     }

@@ -18,7 +18,7 @@ class Certificate:
         self._certificate: typing.Optional[bytes] = None
         self._certificate_chain: typing.Optional[bytes] = None
 
-    def __str__(self) -> str:
+    def __repr__(self) -> str:
         return f"Certificate<{self.domains}>"
 
     @classmethod

@@ -65,7 +65,7 @@ class Route53Authenticator(AuthenticatorProtocol):
         account_key: str,
     ) -> typing.Iterable[typing.Tuple[str, dict]]:
         zone_domains: typing.Dict[str, typing.Dict[str, typing.List[str]]] = {}
-        for (challb, domain) in challs:
+        for challb, domain in challs:
             zone_id = self._get_zone_id(domain)
             assert zone_id, f"Hosted zone not found for domain {domain}"
             zone_domains.setdefault(zone_id, {}).setdefault(domain, []).append(

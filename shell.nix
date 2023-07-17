@@ -1,17 +1,17 @@
 { system ? builtins.currentSystem }:
 let
   pkgsSrc = fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs/archive/bacc31ff571ece62147f3ba70cb6d8d8f483a949.tar.gz";
-    sha256 = "1wbgry1as0867bk5mmx3954pya41j34b3g6af4dpah9mh1ai2jc6";
+    url = "https://github.com/NixOS/nixpkgs/archive/e7603eba51f2c7820c0a182c6bbb351181caa8e7.tar.gz";
+    sha256 = "0mwck8jyr74wh1b7g6nac1mxy6a0rkppz8n12andsffybsipz5jw";
   };
   devshellSrc = fetchTarball {
-    url = "https://github.com/numtide/devshell/archive/f87fb932740abe1c1b46f6edd8a36ade17881666.tar.gz";
-    sha256 = "10cimkql88h7jfjli89i8my8j5la91zm4c78djqlk22dqrxmm6bs";
+    url = "https://github.com/numtide/devshell/archive/5143ea68647c4cf5227e4ad2100db6671fc4c369.tar.gz";
+    sha256 = "1g7wh875aywn83cwjr56dwjpqh05g2k346n7zj1yrj1rvm6hj2pn";
   };
-  pkgs = import pkgsSrc { inherit system; };
-  devshell = import devshellSrc { inherit system pkgs; };
+  nixpkgs = import pkgsSrc { inherit system; };
+  devshell = import devshellSrc { inherit system nixpkgs; };
 in
-with pkgs;
+with nixpkgs;
 let
   LDFLAGS = lib.optionalString stdenv.isLinux "-L${glibc.out}/lib -Wl,-rpath ${glibc.out}/lib";
 in
@@ -23,8 +23,8 @@ devshell.mkShell {
   ];
 
   packages = [
-    python39Packages.pip
-    python39
+    python310Packages.pip
+    python310
     pebble
     minio
     go
@@ -41,15 +41,11 @@ devshell.mkShell {
       value = "1";
     }
     {
-      name = "PYTHONPATH";
-      eval = "$PWD/src";
-    }
-    {
-      name = "MINIO_ACCESS_KEY";
+      name = "MINIO_ROOT_USER";
       eval = "minio_test_access_key";
     }
     {
-      name = "MINIO_SECRET_KEY";
+      name = "MINIO_ROOT_PASSWORD";
       eval = "minio_test_secret_key";
     }
     {
@@ -82,6 +78,36 @@ devshell.mkShell {
       help = "dev install";
       name = "dev.install";
       command = "pip install -U pip && pip install -e '.[dev]'";
+    }
+    {
+      name = "download.testcerts";
+      command = ''
+        curl -z ./fixtures/localhost/cert.pem -o ./fixtures/localhost/cert.pem  https://raw.githubusercontent.com/letsencrypt/pebble/master/test/certs/localhost/cert.pem
+        curl -z ./fixtures/localhost/key.pem -o ./fixtures/localhost/key.pem https://raw.githubusercontent.com/letsencrypt/pebble/master/test/certs/localhost/key.pem
+      '';
+    }
+    {
+      name = "test.coverage";
+      command = ''
+        	py.test \
+        		--cov=acme_serverless_client \
+        		--cov-branch \
+        		--cov-context=test
+      '';
+    }
+    {
+      name = "lint";
+      command = ''
+        	flake8 src/
+        	isort src/
+        	black src/
+        	mypy --strict \
+        		--allow-untyped-decorators \
+        		--follow-imports skip \
+        		--warn-unreachable \
+        		--allow-any-generics \
+        		src/ example/index.py
+      '';
     }
   ];
 }

@@ -12,9 +12,9 @@ logger = logging.getLogger("aws-lambda-acme")
 
 
 if os.environ.get("SENTRY_DSN"):
-    import sentry_sdk
-    from sentry_sdk.integrations.aws_lambda import AwsLambdaIntegration
-    from sentry_sdk.integrations.logging import LoggingIntegration
+    import sentry_sdk  # type: ignore
+    from sentry_sdk.integrations.aws_lambda import AwsLambdaIntegration  # type: ignore
+    from sentry_sdk.integrations.logging import LoggingIntegration  # type: ignore
 
     sentry_sdk.init(
         dsn=os.environ["SENTRY_DSN"],
