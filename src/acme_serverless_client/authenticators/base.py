@@ -6,11 +6,11 @@ class AuthenticatorProtocol(typing.Protocol):
         ...
 
     def perform(
-        self, challs: typing.Iterable[typing.Tuple[typing.Any, str]], account_key: str
+        self, challs: typing.Iterable[tuple[typing.Any, str]], account_key: str
     ) -> None:
         ...
 
     def cleanup(
-        self, challs: typing.Iterable[typing.Tuple[typing.Any, str]], account_key: str
+        self, challs: typing.Iterable[tuple[typing.Any, str]], account_key: str
     ) -> None:
         ...

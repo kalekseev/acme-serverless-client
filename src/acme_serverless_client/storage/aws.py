@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import io
 import typing
@@ -17,12 +19,12 @@ class S3Storage(BaseStorage):
         def put(self, key: str, data: bytes) -> None:
             self.client.upload_fileobj(io.BytesIO(data), self.name, key)
 
-        def get(self, key: str) -> typing.Optional[bytes]:
+        def get(self, key: str) -> bytes | None:
             obj = io.BytesIO()
             try:
                 self.client.download_fileobj(self.name, key, obj)
             except botocore.exceptions.ClientError as exc:
-                if exc.response["Error"]["Code"] == "404":
+                if exc.response.get("Error", {}).get("Code") == "404":
                     return None
                 raise exc
             obj.seek(0)
@@ -49,7 +51,7 @@ class S3Storage(BaseStorage):
         self.bucket = bucket
         super().__init__(*args, **kwargs)
 
-    def _get(self, key: str) -> typing.Optional[bytes]:
+    def _get(self, key: str) -> bytes | None:
         return self.bucket.get(key)
 
     def _set(self, key: str, data: bytes) -> None:
@@ -60,7 +62,7 @@ class S3Storage(BaseStorage):
 
     def list_certificates(
         self,
-    ) -> typing.Iterator[typing.Tuple[str, datetime.datetime]]:
+    ) -> typing.Iterator[tuple[str, datetime.datetime]]:
         for obj in self.bucket.list(Prefix=self.certificate_prefix):
             domain_name = obj["Key"].rsplit("/", 1)[-1]
             valid_after = obj["LastModified"]
@@ -81,9 +83,9 @@ class ACMStorageObserver(StorageObserverProtocol):
     class ARNResolver:
         def __init__(self, client: typing.Any):
             self.client = client
-            self._store: typing.Optional[typing.MutableMapping[str, str]] = None
+            self._store: typing.MutableMapping[str, str] | None = None
 
-        def get(self, domain_name: str) -> typing.Optional[str]:
+        def get(self, domain_name: str) -> str | None:
             if self._store is None:
                 self._store = self._fetch_acm_certificates()
             return self._store.get(domain_name)

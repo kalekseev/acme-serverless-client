@@ -22,7 +22,7 @@ def select_authenticator(
     authenticators: typing.Sequence[AuthenticatorProtocol],
     domain: str,
     challenges: typing.Iterable[typing.Any],
-) -> typing.Tuple[AuthenticatorProtocol, typing.Any]:
+) -> tuple[AuthenticatorProtocol, typing.Any]:
     for authenticator in authenticators:
         for challb in challenges:
             if authenticator.is_supported(domain, challb.chall):
@@ -33,12 +33,8 @@ def select_authenticator(
 def select_challs(
     orderr: messages.OrderResource,
     authenticators: typing.Sequence[AuthenticatorProtocol],
-) -> typing.Sequence[
-    typing.Tuple[AuthenticatorProtocol, typing.Set[typing.Tuple[typing.Any, str]]]
-]:
-    result: typing.Dict[
-        AuthenticatorProtocol, typing.Set[typing.Tuple[typing.Any, str]]
-    ] = {}
+) -> typing.Sequence[tuple[AuthenticatorProtocol, set[tuple[typing.Any, str]]]]:
+    result: dict[AuthenticatorProtocol, set[tuple[typing.Any, str]]] = {}
     for authz in orderr.authorizations:
         domain = authz.body.identifier.value
         challenges = authz.body.challenges
@@ -102,7 +98,7 @@ def perform(
         storage.save_certificate(certificate)
     finally:
         for authenticator, challs in auth_challs:
-            authenticator.cleanup(challs, account_key)
+            authenticator.cleanup(challs, client.net.key)
 
 
 def issue(
@@ -149,7 +145,14 @@ def revoke(
     )
     try:
         client.revoke(fullchain_com, rsn=0)
-    except errors.ConflictError:
-        raise RuntimeError(f"[REVOKE] {certificate.name} certificate already revoked.")
+    except errors.ConflictError as exc:
+        raise RuntimeError(
+            f"[REVOKE] {certificate.name} certificate already revoked."
+        ) from exc
+    # except messages.Error as exc:
+    #     if exc.detail == 'Certificate is expired':
+    #         pass
+    #     else:
+    #         raise
     finally:
         storage.remove_certificate(certificate)

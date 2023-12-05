@@ -14,7 +14,7 @@ class HTTP01Authenticator(AuthenticatorProtocol):
         return isinstance(challenge, challenges.HTTP01)
 
     def perform(
-        self, challs: typing.Iterable[typing.Tuple[typing.Any, str]], account_key: str
+        self, challs: typing.Iterable[tuple[typing.Any, str]], account_key: str
     ) -> None:
         for challb, _ in challs:
             self._storage.set_validation(
@@ -22,7 +22,7 @@ class HTTP01Authenticator(AuthenticatorProtocol):
             )
 
     def cleanup(
-        self, challs: typing.Iterable[typing.Tuple[typing.Any, str]], account_key: str
+        self, challs: typing.Iterable[tuple[typing.Any, str]], account_key: str
     ) -> None:
         for challb, _ in challs:
             self._storage.del_validation(challb.chall.path)

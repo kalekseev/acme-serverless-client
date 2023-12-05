@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import json
 import typing
@@ -23,7 +25,7 @@ class AuthenticatorStorageProtocol(Protocol):
 
 
 class StorageProtocol(ObserverEventsProtocol, Protocol):
-    def get_account(self) -> typing.Optional[Account]:
+    def get_account(self) -> Account | None:
         ...
 
     def set_account(self, account: Account) -> None:
@@ -31,15 +33,15 @@ class StorageProtocol(ObserverEventsProtocol, Protocol):
 
     def list_certificates(
         self,
-    ) -> typing.Iterator[typing.Tuple[str, datetime.datetime]]:
+    ) -> typing.Iterator[tuple[str, datetime.datetime]]:
         ...
 
     def get_certificate(
         self,
         *,
-        domains: typing.Optional[typing.Sequence[str]] = None,
-        name: typing.Optional[str] = None,
-    ) -> typing.Optional[Certificate]:
+        domains: typing.Sequence[str] | None = None,
+        name: str | None = None,
+    ) -> Certificate | None:
         ...
 
 
@@ -62,21 +64,21 @@ class BaseStorage:
     config_prefix = "configs/"
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        self._subscribers: typing.Set[StorageObserverProtocol] = set()
+        self._subscribers: set[StorageObserverProtocol] = set()
 
     @classmethod
-    def _build_certificate_storage_key(self, domain_name: str) -> str:
-        return f"{self.certificate_prefix}{domain_name}"
+    def _build_certificate_storage_key(cls, domain_name: str) -> str:
+        return f"{cls.certificate_prefix}{domain_name}"
 
     @classmethod
-    def _build_key_storage_key(self, domain_name: str) -> str:
-        return f"{self.key_prefix}{domain_name}"
+    def _build_key_storage_key(cls, domain_name: str) -> str:
+        return f"{cls.key_prefix}{domain_name}"
 
     @classmethod
-    def _build_config_storage_key(self, domain_name: str) -> str:
-        return f"{self.config_prefix}{domain_name}"
+    def _build_config_storage_key(cls, domain_name: str) -> str:
+        return f"{cls.config_prefix}{domain_name}"
 
-    def _get(self, name: str) -> typing.Optional[bytes]:
+    def _get(self, name: str) -> bytes | None:
         raise NotImplementedError()
 
     def _set(self, name: str, data: bytes) -> None:
@@ -94,7 +96,7 @@ class BaseStorage:
     def subscribe(self, observer: StorageObserverProtocol) -> None:
         self._subscribers.add(observer)
 
-    def get_account(self) -> typing.Optional[Account]:
+    def get_account(self) -> Account | None:
         data = self._get("account.json")
         if data:
             return Account.json_loads(data.decode())
@@ -105,15 +107,15 @@ class BaseStorage:
 
     def list_certificates(
         self,
-    ) -> typing.Iterator[typing.Tuple[str, datetime.datetime]]:
+    ) -> typing.Iterator[tuple[str, datetime.datetime]]:
         raise NotImplementedError()
 
     def get_certificate(
         self,
         *,
-        domains: typing.Optional[typing.Sequence[str]] = None,
-        name: typing.Optional[str] = None,
-    ) -> typing.Optional[Certificate]:
+        domains: typing.Sequence[str] | None = None,
+        name: str | None = None,
+    ) -> Certificate | None:
         assert domains or name, "domains or name is required."
         if domains:
             if name:

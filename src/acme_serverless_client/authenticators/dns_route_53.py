@@ -1,6 +1,7 @@
 # Modification of
 # https://raw.githubusercontent.com/certbot/certbot/fc7e5e8e6060d9e0df2e704a20103d5c0f456925/certbot-dns-route53/certbot_dns_route53/_internal/dns_route53.py
 # Apache 2.0 license
+from __future__ import annotations
 
 import collections
 import logging
@@ -18,11 +19,11 @@ logger = logging.getLogger(__name__)
 class Route53Authenticator(AuthenticatorProtocol):
     ttl = 10
 
-    def __init__(self, client: typing.Any, zones: typing.Dict[str, str]):
+    def __init__(self, client: typing.Any, zones: dict[str, str]):
         self.r53 = client
         self.zones = {name.rstrip("."): id for name, id in zones.items()}
-        self._resource_records: typing.Dict[
-            str, typing.List[typing.Dict[str, str]]
+        self._resource_records: dict[
+            str, list[dict[str, str]]
         ] = collections.defaultdict(list)
 
     def is_supported(self, domain: str, challenge: typing.Any) -> bool:
@@ -30,7 +31,7 @@ class Route53Authenticator(AuthenticatorProtocol):
             self._get_zone_id(domain)
         )
 
-    def _get_zone_id(self, domain: str) -> typing.Optional[str]:
+    def _get_zone_id(self, domain: str) -> str | None:
         domain = domain.rstrip(".")
         while domain:
             if domain in self.zones:
@@ -39,7 +40,7 @@ class Route53Authenticator(AuthenticatorProtocol):
         return None
 
     def perform(
-        self, challs: typing.Iterable[typing.Tuple[typing.Any, str]], account_key: str
+        self, challs: typing.Iterable[tuple[typing.Any, str]], account_key: str
     ) -> None:
         batches = self._build_r53_change_batches("UPSERT", challs, account_key)
         change_ids = [
@@ -49,7 +50,7 @@ class Route53Authenticator(AuthenticatorProtocol):
             self._wait_for_change(change_id)
 
     def cleanup(
-        self, challs: typing.Iterable[typing.Tuple[typing.Any, str]], account_key: str
+        self, challs: typing.Iterable[tuple[typing.Any, str]], account_key: str
     ) -> None:
         batches = self._build_r53_change_batches("DELETE", challs, account_key)
         for zone_id, batch in batches:
@@ -61,10 +62,10 @@ class Route53Authenticator(AuthenticatorProtocol):
     def _build_r53_change_batches(
         self,
         action: typing.Literal["UPSERT", "DELETE"],
-        challs: typing.Iterable[typing.Tuple[typing.Any, str]],
+        challs: typing.Iterable[tuple[typing.Any, str]],
         account_key: str,
-    ) -> typing.Iterable[typing.Tuple[str, dict]]:
-        zone_domains: typing.Dict[str, typing.Dict[str, typing.List[str]]] = {}
+    ) -> typing.Iterable[tuple[str, dict]]:
+        zone_domains: dict[str, dict[str, list[str]]] = {}
         for challb, domain in challs:
             zone_id = self._get_zone_id(domain)
             assert zone_id, f"Hosted zone not found for domain {domain}"

@@ -1,13 +1,16 @@
+from __future__ import annotations
+
 import json
 import typing
 
-import josepy as jose
+import josepy.json_util
+import josepy.jwk
 from acme import messages
 
 from . import crypto
 
 
-class CertificateNotSet(Exception):
+class CertificateNotSetError(Exception):
     pass
 
 
@@ -15,14 +18,14 @@ class Certificate:
     def __init__(self, domains: typing.Sequence[str], private_key: bytes) -> None:
         self.domains = list(domains)
         self.private_key = private_key
-        self._certificate: typing.Optional[bytes] = None
-        self._certificate_chain: typing.Optional[bytes] = None
+        self._certificate: bytes | None = None
+        self._certificate_chain: bytes | None = None
 
     def __repr__(self) -> str:
         return f"Certificate<{self.domains}>"
 
     @classmethod
-    def generate_private_key(self) -> bytes:
+    def generate_private_key(cls) -> bytes:
         return crypto.generate_private_key()
 
     @property
@@ -32,13 +35,13 @@ class Certificate:
     @property
     def certificate(self) -> bytes:
         if not self._certificate:
-            raise CertificateNotSet()
+            raise CertificateNotSetError()
         return self._certificate
 
     @property
     def certificate_chain(self) -> bytes:
         if not self._certificate_chain:
-            raise CertificateNotSet()
+            raise CertificateNotSetError()
         return self._certificate_chain
 
     @property
@@ -48,8 +51,8 @@ class Certificate:
     @property
     def is_fullchain_set(self) -> bool:
         try:
-            self.certificate
-        except CertificateNotSet:
+            self.certificate  # noqa
+        except CertificateNotSetError:
             return False
         return True
 
@@ -62,26 +65,29 @@ class Certificate:
 
 class Account:
     def __init__(
-        self, key: jose.JWKRSA = None, regr: messages.RegistrationResource = None
+        self,
+        key: josepy.json_util.TypedJSONObjectWithFields | None = None,
+        regr: messages.RegistrationResource | None = None,
     ) -> None:
         self._key = key
         self.regr = regr
 
     @property
-    def key(self) -> jose.JWKRSA:
+    def key(self) -> josepy.json_util.TypedJSONObjectWithFields:
         if not self._key:
             self._key = crypto.generate_account_key()
         return self._key
 
     @staticmethod
-    def json_loads(jstr: str) -> "Account":
+    def json_loads(jstr: str) -> Account:
         data = json.loads(jstr)
         return Account(
-            key=jose.JWKRSA.from_json(data["key"]),
+            key=josepy.jwk.JWKRSA.from_json(data["key"]),
             regr=messages.RegistrationResource.from_json(data["regr"]),
         )
 
     def _to_json(self) -> typing.Mapping[str, typing.Any]:
+        assert self.regr
         return {
             "key": json.loads(self.key.json_dumps()),
             "regr": json.loads(self.regr.json_dumps()),
