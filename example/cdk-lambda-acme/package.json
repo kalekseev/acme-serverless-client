@@ -22,11 +22,11 @@
     "typescript": "^3.9.7"
   },
   "dependencies": {
-    "@aws-cdk/core": "^1.59.0",
-    "@aws-cdk/aws-events": "^1.59.0",
-    "@aws-cdk/aws-events-targets": "^1.59.0",
-    "@aws-cdk/aws-iam": "^1.59.0",
-    "@aws-cdk/aws-lambda": "^1.59.0",
-    "@aws-cdk/aws-s3": "^1.59.0"
+    "@aws-cdk/core": "^1.204.0",
+    "@aws-cdk/aws-events": "^1.204.0",
+    "@aws-cdk/aws-events-targets": "^1.204.0",
+    "@aws-cdk/aws-iam": "^1.204.0",
+    "@aws-cdk/aws-lambda": "^1.204.0",
+    "@aws-cdk/aws-s3": "^1.204.0"
   }
 }
