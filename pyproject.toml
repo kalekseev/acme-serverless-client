@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "acme-serverless-client"
-version = "0.1.0"
+version = "0.2.0"
 authors = [{name = "Konstantin Alekseev", email = "mail@kalekseev.com"}]
 description = "ACME client for serverless environment"
 keywords = ["serverless", "acme"]
@@ -16,17 +16,17 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
-    "acme>=2.0,<3.0",
-    "cryptography>=35.0",
-    "josepy>=1.3.0,<2.0",
+    "acme>=5.0,<6.0",
+    "cryptography>=46.0",
+    "josepy>=2.0,<3.0",
 ]
 
 [project.readme]
@@ -39,14 +39,13 @@ Homepage = "https://github.com/kalekseev/acme-serverless-client"
 [project.optional-dependencies]
 dev = [
     "ruff",
-    "boto3>=1.14,<2.0",
-    "moto>=4.0,<5.0",
-    "mypy>=0.782",
+    "boto3>=1.14",
+    "moto>=5.0",
+    "mypy>=1.0",
     "pdbpp>=0.10",
-    "pytest>=7.0,<8.0",
-    "pytest-cov>=4.0,<5.0",
-    "time-machine>=2.0,<3.0",
-    "types-pyOpenSSL",
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "time-machine>=2.0",
     "boto3-stubs",
     "botocore-stubs",
 ]
@@ -67,15 +66,18 @@ testpaths = ["tests"]
 filterwarnings = [
     "ignore:Using or importing the ABCs.*:DeprecationWarning",
     "ignore:the imp module is deprecated.*:DeprecationWarning",
+    # moto uses deprecated cryptography datetime properties
+    "ignore:Properties that return a naïve datetime.*:cryptography.utils.CryptographyDeprecationWarning",
 ]
 
 [tool.coverage.run]
 omit = ["*tests*"]
 
 [tool.ruff]
-src = ["src"]
-target-version = "py38"
+src = ["src", "tests"]
+target-version = "py310"
 
+[tool.ruff.lint]
 select = [
   'B',
   'C',
@@ -90,4 +92,19 @@ select = [
   'INP',
   'I',
   'FIX003'
+]
+ignore = [
+  "E501",
+  "PLR0911",
+  "PLR0913",
+  "PLR0915",
+  "PLR1711",
+  "PLR2004",
+  "PLR5501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/conftest.py" = [
+  "N803",    # AWS API argument names (HostedZoneId, ChangeBatch, Id)
+  "PLC0415", # imports inside functions for monkey-patching
 ]

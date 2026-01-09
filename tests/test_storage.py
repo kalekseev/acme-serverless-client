@@ -124,7 +124,7 @@ morebytes
 
 
 def test_acm_set_certificate(acm, read_fixture, moto_certs, monkeypatch):
-    key_pem, fullchain_pem = moto_certs
+    _key_pem, fullchain_pem = moto_certs
     storage = FakeStorage()
     observer = ACMStorageObserver(acm=acm)
     storage.subscribe(observer)

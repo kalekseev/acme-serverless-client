@@ -66,14 +66,14 @@ class Certificate:
 class Account:
     def __init__(
         self,
-        key: josepy.json_util.TypedJSONObjectWithFields | None = None,
+        key: josepy.jwk.JWK | None = None,
         regr: messages.RegistrationResource | None = None,
     ) -> None:
         self._key = key
         self.regr = regr
 
     @property
-    def key(self) -> josepy.json_util.TypedJSONObjectWithFields:
+    def key(self) -> josepy.jwk.JWK:
         if not self._key:
             self._key = crypto.generate_account_key()
         return self._key
@@ -81,8 +81,10 @@ class Account:
     @staticmethod
     def json_loads(jstr: str) -> Account:
         data = json.loads(jstr)
+        key = josepy.jwk.JWKRSA.from_json(data["key"])
+        assert isinstance(key, josepy.jwk.JWK)
         return Account(
-            key=josepy.jwk.JWKRSA.from_json(data["key"]),
+            key=key,
             regr=messages.RegistrationResource.from_json(data["regr"]),
         )
 
@@ -95,6 +97,8 @@ class Account:
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Account) and self._to_json() == other._to_json()
+
+    __hash__ = None  # type: ignore[assignment]  # mutable object, not hashable
 
     def json_dumps(self) -> str:
         return json.dumps(self._to_json())
