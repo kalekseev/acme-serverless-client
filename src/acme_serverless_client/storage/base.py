@@ -9,40 +9,32 @@ from ..models import Account, Certificate
 
 
 class ObserverEventsProtocol(Protocol):
-    def save_certificate(self, certificate: Certificate) -> None:
-        ...
+    def save_certificate(self, certificate: Certificate) -> None: ...
 
-    def remove_certificate(self, certificate: Certificate) -> None:
-        ...
+    def remove_certificate(self, certificate: Certificate) -> None: ...
 
 
 class AuthenticatorStorageProtocol(Protocol):
-    def set_validation(self, key: str, value: bytes) -> None:
-        ...
+    def set_validation(self, key: str, value: bytes) -> None: ...
 
-    def del_validation(self, key: str) -> None:
-        ...
+    def del_validation(self, key: str) -> None: ...
 
 
 class StorageProtocol(ObserverEventsProtocol, Protocol):
-    def get_account(self) -> Account | None:
-        ...
+    def get_account(self) -> Account | None: ...
 
-    def set_account(self, account: Account) -> None:
-        ...
+    def set_account(self, account: Account) -> None: ...
 
     def list_certificates(
         self,
-    ) -> typing.Iterator[tuple[str, datetime.datetime]]:
-        ...
+    ) -> typing.Iterator[tuple[str, datetime.datetime]]: ...
 
     def get_certificate(
         self,
         *,
         domains: typing.Sequence[str] | None = None,
         name: str | None = None,
-    ) -> Certificate | None:
-        ...
+    ) -> Certificate | None: ...
 
 
 StorageEvent = typing.Literal["save_certificate", "remove_certificate"]
@@ -119,9 +111,9 @@ class BaseStorage:
         assert domains or name, "domains or name is required."
         if domains:
             if name:
-                assert (
-                    domains[0] == name
-                ), "first entry in domains must be equal to name."
+                assert domains[0] == name, (
+                    "first entry in domains must be equal to name."
+                )
             name = domains[0]
         assert name  # fix typing
         config_data = self._get(self._build_config_storage_key(name))

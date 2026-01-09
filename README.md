@@ -19,4 +19,4 @@ For testing these binaries must be available in PATH:
 - [challtestsrv](https://github.com/letsencrypt/pebble/releases)
 - [minio](https://min.io/download)
 
-Run tests with `PEBBLE_VA_NOSLEEP=1 py.test`
+Run tests with `PEBBLE_VA_NOSLEEP=1 PEBBLE_WFE_NONCEREJECT=0 py.test`

@@ -8,6 +8,7 @@ import logging
 import time
 import typing
 
+import josepy.jwk
 from acme import challenges
 from botocore.exceptions import ClientError, NoCredentialsError
 
@@ -22,9 +23,9 @@ class Route53Authenticator(AuthenticatorProtocol):
     def __init__(self, client: typing.Any, zones: dict[str, str]):
         self.r53 = client
         self.zones = {name.rstrip("."): id for name, id in zones.items()}
-        self._resource_records: dict[
-            str, list[dict[str, str]]
-        ] = collections.defaultdict(list)
+        self._resource_records: dict[str, list[dict[str, str]]] = (
+            collections.defaultdict(list)
+        )
 
     def is_supported(self, domain: str, challenge: typing.Any) -> bool:
         return isinstance(challenge, challenges.DNS01) and bool(
@@ -40,7 +41,9 @@ class Route53Authenticator(AuthenticatorProtocol):
         return None
 
     def perform(
-        self, challs: typing.Iterable[tuple[typing.Any, str]], account_key: str
+        self,
+        challs: typing.Iterable[tuple[typing.Any, str]],
+        account_key: josepy.jwk.JWK,
     ) -> None:
         batches = self._build_r53_change_batches("UPSERT", challs, account_key)
         change_ids = [
@@ -50,7 +53,9 @@ class Route53Authenticator(AuthenticatorProtocol):
             self._wait_for_change(change_id)
 
     def cleanup(
-        self, challs: typing.Iterable[tuple[typing.Any, str]], account_key: str
+        self,
+        challs: typing.Iterable[tuple[typing.Any, str]],
+        account_key: josepy.jwk.JWK,
     ) -> None:
         batches = self._build_r53_change_batches("DELETE", challs, account_key)
         for zone_id, batch in batches:
@@ -63,7 +68,7 @@ class Route53Authenticator(AuthenticatorProtocol):
         self,
         action: typing.Literal["UPSERT", "DELETE"],
         challs: typing.Iterable[tuple[typing.Any, str]],
-        account_key: str,
+        account_key: josepy.jwk.JWK,
     ) -> typing.Iterable[tuple[str, dict]]:
         zone_domains: dict[str, dict[str, list[str]]] = {}
         for challb, domain in challs:
@@ -115,7 +120,5 @@ class Route53Authenticator(AuthenticatorProtocol):
             if response["ChangeInfo"]["Status"] == "INSYNC":
                 return
             time.sleep(5)
-        raise RuntimeError(
-            "Timed out waiting for Route53 change. Current status: %s"
-            % response["ChangeInfo"]["Status"]
-        )
+        status = response["ChangeInfo"]["Status"]
+        raise RuntimeError(f"Timed out waiting for Route53 change. Status: {status}")

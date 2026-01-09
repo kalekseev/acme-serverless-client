@@ -14,10 +14,75 @@ import pytest
 import urllib3
 from acme.standalone import BaseDualNetworkedServers, HTTPServer
 from botocore.client import Config
-from moto import mock_acm, mock_s3
+from moto import mock_aws
 from urllib3.exceptions import InsecureRequestWarning
 
 from acme_serverless_client.storage.aws import S3Storage
+
+
+# Patch moto's CertBundle to handle certificates without CN (modern certs use SANs only)
+def _patch_moto_certbundle():
+    from cryptography.x509.oid import NameOID
+    from moto.acm import models as acm_models
+
+    def new_init(
+        self,
+        account_id,
+        certificate,
+        private_key,
+        chain=None,
+        region="us-east-1",
+        arn=None,
+        cert_type="IMPORTED",
+        cert_status="ISSUED",
+        cert_authority_arn=None,
+        cert_options=None,
+    ):
+        from moto.acm.models import AWS_ROOT_CA, TagHolder, make_arn_for_certificate
+
+        self.created_at = acm_models.utcnow()
+        self.cert = certificate
+        self.key = private_key
+        self.chain = chain + b"\n" + AWS_ROOT_CA if chain else AWS_ROOT_CA
+        self.tags = TagHolder()
+        self.type = cert_type
+        self.status = cert_status
+        self.cert_authority_arn = cert_authority_arn
+        self.in_use_by = []
+        self.cert_options = cert_options or {
+            "CertificateTransparencyLoggingPreference": "ENABLED",
+            "Export": "DISABLED",
+        }
+
+        self._key = self.validate_pk()
+        self._cert = self.validate_certificate()
+
+        # Handle certificates without CN (modern certs use SANs only)
+        cn_attrs = self._cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        if cn_attrs:
+            self.common_name = cn_attrs[0].value
+        else:
+            # Fall back to first SAN DNS name
+            try:
+                from cryptography import x509
+
+                san_ext = self._cert.extensions.get_extension_for_class(
+                    x509.SubjectAlternativeName
+                )
+                dns_names = san_ext.value.get_values_for_type(x509.DNSName)
+                self.common_name = dns_names[0] if dns_names else "unknown"
+            except Exception:
+                self.common_name = "unknown"
+
+        if chain is not None:
+            self.validate_chain()
+
+        self.arn = arn or make_arn_for_certificate(account_id, region)
+
+    acm_models.CertBundle.__init__ = new_init
+
+
+_patch_moto_certbundle()
 
 
 @pytest.fixture(scope="session")
@@ -66,13 +131,13 @@ def read_fixture():
 
 @pytest.fixture(scope="function")
 def s3(moto_credentials):
-    with mock_s3():
+    with mock_aws():
         yield boto3.client("s3", region_name="ap-southeast-2")
 
 
 @pytest.fixture(scope="function")
 def acm(moto_credentials):
-    with mock_acm():
+    with mock_aws():
         yield boto3.client("acm", region_name="ap-southeast-2")
 
 
@@ -125,7 +190,7 @@ def disable_ssl(monkeypatch: typing.Any) -> typing.Iterator[None]:
     net_cls = acme.client.ClientNetwork
     monkeypatch.setattr(
         "acme_serverless_client.client.acme.client.ClientNetwork",
-        lambda *args, **kwargs: net_cls(verify_ssl=False, *args, **kwargs),
+        lambda *args, **kwargs: net_cls(*args, **{**kwargs, "verify_ssl": False}),
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", InsecureRequestWarning)
@@ -135,18 +200,18 @@ def disable_ssl(monkeypatch: typing.Any) -> typing.Iterator[None]:
 @pytest.fixture(scope="session")
 def load_balancer(pebble_settings, minio_boto3_settings, minio_settings):
     class RedirectHandler(BaseHTTPRequestHandler):
-        def do_HEAD(s):
-            s.send_response(301)
-            if not s.path.startswith("/.well-known/acme-challenge/"):
-                raise ValueError(f"Got invalid request. path: {s.path}")
-            s.send_header(
+        def do_HEAD(self):
+            self.send_response(301)
+            if not self.path.startswith("/.well-known/acme-challenge/"):
+                raise ValueError(f"Got invalid request. path: {self.path}")
+            self.send_header(
                 "Location",
-                f"{minio_boto3_settings['endpoint_url']}/{minio_settings['BUCKET']}{s.path}",
+                f"{minio_boto3_settings['endpoint_url']}/{minio_settings['BUCKET']}{self.path}",
             )
-            s.end_headers()
+            self.end_headers()
 
-        def do_GET(s):
-            s.do_HEAD()
+        def do_GET(self):
+            self.do_HEAD()
 
     port = pebble_settings["HTTP_PORT"]
     server = BaseDualNetworkedServers(HTTPServer, ("", port), RedirectHandler)
@@ -158,7 +223,7 @@ def load_balancer(pebble_settings, minio_boto3_settings, minio_settings):
         server.shutdown_and_server_close()
 
 
-def await_port(port: typing.Union[str, int], timeout=4):
+def await_port(port: str | int, timeout=4):
     start = time.time()
     a_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     while a_socket.connect_ex(("127.0.0.1", int(port))):

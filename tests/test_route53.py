@@ -1,5 +1,5 @@
-import datetime
 import json
+from datetime import datetime, timezone
 
 import acme
 import urllib3
@@ -136,9 +136,13 @@ def test_dns01(
     pem_data = storage.get_certificate(domains=[domain_name]).fullchain
     assert pem_data
     cert = x509.load_pem_x509_certificate(pem_data, default_backend())
-    assert cert.subject.rfc4514_string() == f"CN={domain_name}"
-    valid_from = cert.not_valid_before
-    assert datetime.datetime.now() > valid_from
+    # Modern certs (RFC 8555) use SANs, CN may be empty
+    sans = cert.extensions.get_extension_for_class(
+        x509.extensions.SubjectAlternativeName
+    ).value
+    assert domain_name in [x.value for x in sans]
+    valid_from = cert.not_valid_before_utc
+    assert datetime.now(timezone.utc) > valid_from
 
 
 def test_san_dns01(
@@ -160,10 +164,10 @@ def test_san_dns01(
     pem_data = storage.get_certificate(domains=domains).fullchain
     assert pem_data
     cert = x509.load_pem_x509_certificate(pem_data, default_backend())
-    assert cert.subject.rfc4514_string() == f"CN={domains[0]}"
+    # Modern certs (RFC 8555) use SANs, CN may be empty
     sans = cert.extensions.get_extension_for_class(
         x509.extensions.SubjectAlternativeName
     ).value
     assert [x.value for x in sans] == domains
-    valid_from = cert.not_valid_before
-    assert datetime.datetime.now() > valid_from
+    valid_from = cert.not_valid_before_utc
+    assert datetime.now(timezone.utc) > valid_from

@@ -6,7 +6,7 @@ Based on https://github.com/certbot/certbot/blob/859dc38cb9195de072bc46e30e3edc0
 import typing
 
 import acme.client
-from acme import crypto_util, errors, messages
+from acme import errors, messages
 
 from . import crypto
 from .authenticators.base import AuthenticatorProtocol
@@ -36,6 +36,9 @@ def select_challs(
 ) -> typing.Sequence[tuple[AuthenticatorProtocol, set[tuple[typing.Any, str]]]]:
     result: dict[AuthenticatorProtocol, set[tuple[typing.Any, str]]] = {}
     for authz in orderr.authorizations:
+        # Skip already-valid authorizations (can happen with authz reuse)
+        if authz.body.status.name == "valid":
+            continue
         domain = authz.body.identifier.value
         challenges = authz.body.challenges
         authenticator, challb = select_authenticator(authenticators, domain, challenges)
@@ -83,11 +86,12 @@ def perform(
     )
 
     orderr = client.new_order(
-        crypto_util.make_csr(certificate.private_key, certificate.domains)
+        crypto.make_csr(certificate.private_key, certificate.domains)
     )
     auth_challs = select_challs(orderr, authenticators)
+    account_key = client.net.key
+    assert account_key is not None
     for authenticator, challs in auth_challs:
-        account_key = client.net.key
         authenticator.perform(challs, account_key)
         for challb, _ in challs:
             client.answer_challenge(challb, challb.response(account_key))
@@ -98,7 +102,7 @@ def perform(
         storage.save_certificate(certificate)
     finally:
         for authenticator, challs in auth_challs:
-            authenticator.cleanup(challs, client.net.key)
+            authenticator.cleanup(challs, account_key)
 
 
 def issue(
@@ -149,10 +153,5 @@ def revoke(
         raise RuntimeError(
             f"[REVOKE] {certificate.name} certificate already revoked."
         ) from exc
-    # except messages.Error as exc:
-    #     if exc.detail == 'Certificate is expired':
-    #         pass
-    #     else:
-    #         raise
     finally:
         storage.remove_certificate(certificate)
